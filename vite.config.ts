@@ -1,10 +1,7 @@
 import { defineConfig } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
 
-const INPUT = process.env.INPUT;
-if (!INPUT) {
-  throw new Error("INPUT environment variable is not set");
-}
+const INPUT = process.env.INPUT || "mcp-app.html";
 
 const isDevelopment = process.env.NODE_ENV === "development";
 
