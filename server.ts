@@ -453,6 +453,7 @@ export function createServer(): McpServer {
           ],
           _meta: {
             viewUUID: randomUUID(),
+            weatherData: formattedData,
           },
         };
       } catch (error) {

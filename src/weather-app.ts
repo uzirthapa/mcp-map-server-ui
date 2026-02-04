@@ -172,11 +172,16 @@ app.onteardown = async () => {
 
 app.onerror = log.error;
 
-// Handle tool input (weather data from show-weather tool)
+// Handle tool input (initial call)
 app.ontoolinput = async (params) => {
   log.info("Received tool input:", params);
+};
 
-  const weatherData = params.arguments as WeatherData | undefined;
+// Handle tool result (weather data from show-weather tool)
+app.ontoolresult = async (result) => {
+  log.info("Received tool result:", result);
+
+  const weatherData = result._meta?.weatherData as WeatherData | undefined;
 
   if (weatherData) {
     try {
