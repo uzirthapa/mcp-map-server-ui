@@ -672,6 +672,57 @@ function handleFullscreenKeyboard(event: KeyboardEvent): void {
 }
 
 /**
+ * Call the shuffle-cities tool and update the map
+ */
+async function shuffleCities(): Promise<void> {
+  const shuffleBtn = document.getElementById("shuffle-btn");
+  if (!shuffleBtn || !viewer) return;
+
+  // Disable button while shuffling
+  shuffleBtn.setAttribute("disabled", "true");
+  log.info("Shuffling cities...");
+
+  try {
+    // Call the shuffle-cities tool on the server
+    const result = await app.callServerTool({
+      name: "shuffle-cities",
+      arguments: {},
+    });
+    log.info("Shuffle result:", result);
+
+    // Extract city data from result metadata
+    const cityData = result._meta?.city as
+      | {
+          name: string;
+          west: number;
+          south: number;
+          east: number;
+          north: number;
+        }
+      | undefined;
+
+    if (cityData) {
+      log.info("Navigating to:", cityData.name);
+      // Update the map to show the random city
+      const bbox: BoundingBox = {
+        west: cityData.west,
+        south: cityData.south,
+        east: cityData.east,
+        north: cityData.north,
+      };
+      setViewToBoundingBox(viewer, bbox);
+      await waitForTilesLoaded(viewer);
+    }
+  } catch (error) {
+    log.error("Failed to shuffle cities:", error);
+  } finally {
+    // Re-enable button
+    shuffleBtn.removeAttribute("disabled");
+  }
+}
+
+
+/**
  * Handle display mode changes - resize Cesium and update UI
  */
 function handleDisplayModeChange(
@@ -724,7 +775,7 @@ app.onhostcontextchanged = (params) => {
   }
 };
 
-// Handle initial tool input (bounding box from show-map tool)
+// Handle initial tool input (bounding box from show-map or shuffle-cities tool)
 app.ontoolinput = async (params) => {
   log.info("Received tool input:", params);
   const args = params.arguments as
@@ -832,6 +883,13 @@ async function initialize() {
     const fullscreenBtn = document.getElementById("fullscreen-btn");
     if (fullscreenBtn) {
       fullscreenBtn.addEventListener("click", toggleFullscreen);
+    }
+
+    // Set up shuffle button
+    const shuffleBtn = document.getElementById("shuffle-btn");
+    if (shuffleBtn) {
+      shuffleBtn.addEventListener("click", shuffleCities);
+      log.info("Shuffle button registered");
     }
 
     // Set up keyboard shortcuts for fullscreen (Escape to exit, Ctrl/Cmd+Enter to toggle)

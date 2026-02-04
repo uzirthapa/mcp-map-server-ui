@@ -46,6 +46,25 @@ interface NominatimResult {
 let lastNominatimRequest = 0;
 const NOMINATIM_RATE_LIMIT_MS = 1100; // 1.1 seconds to be safe
 
+// List of interesting cities with their bounding boxes
+const CITIES = [
+  { name: "Paris", west: 2.2241, south: 48.8156, east: 2.4697, north: 48.9022 },
+  { name: "Tokyo", west: 139.6917, south: 35.6895, east: 139.7712, north: 35.8174 },
+  { name: "New York", west: -74.0479, south: 40.6829, east: -73.9067, north: 40.8820 },
+  { name: "London", west: -0.5, south: 51.3, east: 0.3, north: 51.7 },
+  { name: "Sydney", west: 151.0, south: -34.0, east: 151.3, north: -33.7 },
+  { name: "Rio de Janeiro", west: -43.7964, south: -23.0826, east: -43.0999, north: -22.7461 },
+  { name: "Dubai", west: 55.1, south: 24.9, east: 55.6, north: 25.4 },
+  { name: "Mumbai", west: 72.7763, south: 18.8937, east: 72.9781, north: 19.2701 },
+  { name: "San Francisco", west: -122.5173, south: 37.7032, east: -122.3558, north: 37.8324 },
+  { name: "Barcelona", west: 2.0524, south: 41.3201, east: 2.2280, north: 41.4695 },
+  { name: "Singapore", west: 103.6, south: 1.2, east: 104.0, north: 1.5 },
+  { name: "Istanbul", west: 28.8, south: 40.9, east: 29.3, north: 41.3 },
+  { name: "Los Angeles", west: -118.6682, south: 33.7037, east: -118.1553, north: 34.3373 },
+  { name: "Berlin", west: 13.0883, south: 52.3382, east: 13.7611, north: 52.6755 },
+  { name: "Mexico City", west: -99.3654, south: 19.0493, east: -98.9420, north: 19.5926 },
+];
+
 /**
  * Query Nominatim geocoding API with rate limiting
  */
@@ -188,6 +207,41 @@ export function createServer(): McpServer {
         viewUUID: randomUUID(),
       },
     }),
+  );
+
+  // shuffle-cities tool - randomly selects a city and displays it on the map
+  registerAppTool(
+    server,
+    "shuffle-cities",
+    {
+      title: "Shuffle Cities",
+      description: "Display a random city from around the world on the map.",
+      inputSchema: {},
+      _meta: { [RESOURCE_URI_META_KEY]: RESOURCE_URI },
+    },
+    async (): Promise<CallToolResult> => {
+      // Pick a random city
+      const city = CITIES[Math.floor(Math.random() * CITIES.length)];
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Displaying ${city.name}: W:${city.west.toFixed(4)}, S:${city.south.toFixed(4)}, E:${city.east.toFixed(4)}, N:${city.north.toFixed(4)}`,
+          },
+        ],
+        _meta: {
+          viewUUID: randomUUID(),
+          city: {
+            name: city.name,
+            west: city.west,
+            south: city.south,
+            east: city.east,
+            north: city.north,
+          },
+        },
+      };
+    },
   );
 
   // geocode tool - searches for places using Nominatim (no UI)

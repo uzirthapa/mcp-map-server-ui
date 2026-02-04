@@ -20,29 +20,44 @@
             width: 100%;
             height: 100%;
         }
-        #fullscreen-btn {
+        .btn {
             position: absolute;
-            top: 10px;
-            right: 10px;
-            width: 36px;
-            height: 36px;
             background: rgba(0, 0, 0, 0.7);
             border: none;
             border-radius: 6px;
             cursor: pointer;
             z-index: 1000;
-            display: none;
+            display: flex;
             align-items: center;
             justify-content: center;
             transition: background 0.2s;
+            color: white;
         }
-        #fullscreen-btn:hover {
+        .btn:hover {
             background: rgba(0, 0, 0, 0.85);
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        #fullscreen-btn {
+            top: 10px;
+            right: 10px;
+            width: 36px;
+            height: 36px;
+            display: none;
         }
         #fullscreen-btn svg {
             width: 20px;
             height: 20px;
             fill: white;
+        }
+        #shuffle-btn {
+            top: 10px;
+            left: 10px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 500;
         }
         #loading {
             position: absolute;
@@ -60,7 +75,8 @@
 </head>
 <body>
     <div id="cesiumContainer"></div>
-    <button id="fullscreen-btn" title="Toggle fullscreen">
+    <button id="shuffle-btn" class="btn" title="Show a random city">Shuffle</button>
+    <button id="fullscreen-btn" class="btn" title="Toggle fullscreen">
         <!-- Expand icon (shown when inline) -->
         <svg id="expand-icon" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
         <!-- Compress icon (shown when fullscreen) -->
