@@ -26,6 +26,7 @@ const DIST_DIR = import.meta.filename.endsWith(".ts")
   ? path.join(import.meta.dirname, "dist")
   : import.meta.dirname;
 const RESOURCE_URI = "ui://cesium-map/mcp-app.html";
+const WEATHER_RESOURCE_URI = "ui://weather-dashboard/weather-app.html";
 
 // Nominatim API response type
 interface NominatimResult {
@@ -64,6 +65,74 @@ const CITIES = [
   { name: "Berlin", west: 13.0883, south: 52.3382, east: 13.7611, north: 52.6755 },
   { name: "Mexico City", west: -99.3654, south: 19.0493, east: -98.9420, north: 19.5926 },
 ];
+
+// Open-Meteo API response types
+interface OpenMeteoResponse {
+  latitude: number;
+  longitude: number;
+  current: {
+    temperature_2m: number;
+    relative_humidity_2m: number;
+    apparent_temperature: number;
+    weather_code: number;
+    wind_speed_10m: number;
+  };
+  daily: {
+    time: string[];
+    temperature_2m_max: number[];
+    temperature_2m_min: number[];
+    weather_code: number[];
+    uv_index_max: number[];
+  };
+}
+
+/**
+ * Get weather condition text from WMO weather code
+ */
+function getWeatherCondition(weatherCode: number): string {
+  if (weatherCode === 0) return "Clear Sky";
+  if (weatherCode === 1) return "Mainly Clear";
+  if (weatherCode === 2) return "Partly Cloudy";
+  if (weatherCode === 3) return "Overcast";
+  if (weatherCode <= 48) return "Foggy";
+  if (weatherCode <= 57) return "Drizzle";
+  if (weatherCode <= 67) return "Rain";
+  if (weatherCode <= 77) return "Snow";
+  if (weatherCode <= 82) return "Rain Showers";
+  if (weatherCode <= 86) return "Snow Showers";
+  if (weatherCode <= 99) return "Thunderstorm";
+  return "Unknown";
+}
+
+/**
+ * Fetch weather data from Open-Meteo API (no API key required)
+ */
+async function fetchWeatherData(
+  latitude: number,
+  longitude: number,
+): Promise<OpenMeteoResponse> {
+  const params = new URLSearchParams({
+    latitude: latitude.toString(),
+    longitude: longitude.toString(),
+    current:
+      "temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m",
+    daily: "temperature_2m_max,temperature_2m_min,weather_code,uv_index_max",
+    timezone: "auto",
+    forecast_days: "7",
+  });
+
+  const response = await fetch(
+    `https://api.open-meteo.com/v1/forecast?${params}`,
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Open-Meteo API error: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  return response.json() as Promise<OpenMeteoResponse>;
+}
 
 /**
  * Query Nominatim geocoding API with rate limiting
@@ -159,6 +228,40 @@ export function createServer(): McpServer {
     },
   );
 
+  // Register the Weather Dashboard resource
+  const weatherCspMeta = {
+    ui: {
+      csp: {
+        // Allow fetching weather data from Open-Meteo
+        connectDomains: ["https://api.open-meteo.com"],
+        resourceDomains: ["https://api.open-meteo.com"],
+      },
+    },
+  };
+
+  registerAppResource(
+    server,
+    WEATHER_RESOURCE_URI,
+    WEATHER_RESOURCE_URI,
+    { mimeType: RESOURCE_MIME_TYPE },
+    async (): Promise<ReadResourceResult> => {
+      const html = await fs.readFile(
+        path.join(DIST_DIR, "weather-app.html"),
+        "utf-8",
+      );
+      return {
+        contents: [
+          {
+            uri: WEATHER_RESOURCE_URI,
+            mimeType: RESOURCE_MIME_TYPE,
+            text: html,
+            _meta: weatherCspMeta,
+          },
+        ],
+      };
+    },
+  );
+
   // show-map tool - displays the CesiumJS globe
   // Default bounding box: London area
   registerAppTool(
@@ -241,6 +344,128 @@ export function createServer(): McpServer {
           },
         },
       };
+    },
+  );
+
+  // show-weather tool - displays weather dashboard for a location
+  registerAppTool(
+    server,
+    "show-weather",
+    {
+      title: "Show Weather",
+      description:
+        "Display a weather dashboard with current conditions and 7-day forecast for a location. Accepts either coordinates or a city name.",
+      inputSchema: {
+        location: z
+          .string()
+          .optional()
+          .describe(
+            "City name or place to get weather for (e.g., 'Paris', 'New York'). If provided, coordinates are ignored.",
+          ),
+        latitude: z
+          .number()
+          .optional()
+          .describe(
+            "Latitude of the location (-90 to 90). Used if location is not provided.",
+          ),
+        longitude: z
+          .number()
+          .optional()
+          .describe(
+            "Longitude of the location (-180 to 180). Used if location is not provided.",
+          ),
+      },
+      _meta: { [RESOURCE_URI_META_KEY]: WEATHER_RESOURCE_URI },
+    },
+    async ({ location, latitude, longitude }): Promise<CallToolResult> => {
+      try {
+        let lat: number;
+        let lon: number;
+        let locationName: string;
+
+        // If location name is provided, geocode it first
+        if (location) {
+          const geocodeResults = await geocodeWithNominatim(location);
+          if (geocodeResults.length === 0) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Could not find location: ${location}`,
+                },
+              ],
+              isError: true,
+            };
+          }
+
+          const firstResult = geocodeResults[0];
+          lat = parseFloat(firstResult.lat);
+          lon = parseFloat(firstResult.lon);
+          locationName = firstResult.display_name.split(",")[0]; // Get city name
+        } else if (latitude !== undefined && longitude !== undefined) {
+          lat = latitude;
+          lon = longitude;
+          locationName = `${lat.toFixed(2)}°, ${lon.toFixed(2)}°`;
+        } else {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "Please provide either a location name or coordinates (latitude and longitude)",
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Fetch weather data from Open-Meteo
+        const weatherData = await fetchWeatherData(lat, lon);
+
+        // Format the data for the UI
+        const formattedData = {
+          location: locationName,
+          latitude: lat,
+          longitude: lon,
+          current: {
+            temperature: weatherData.current.temperature_2m,
+            condition: getWeatherCondition(weatherData.current.weather_code),
+            feelsLike: weatherData.current.apparent_temperature,
+            humidity: weatherData.current.relative_humidity_2m,
+            windSpeed: weatherData.current.wind_speed_10m,
+            uvIndex: weatherData.daily.uv_index_max[0],
+            weatherCode: weatherData.current.weather_code,
+          },
+          forecast: weatherData.daily.time.map((date, index) => ({
+            date,
+            tempMax: weatherData.daily.temperature_2m_max[index],
+            tempMin: weatherData.daily.temperature_2m_min[index],
+            weatherCode: weatherData.daily.weather_code[index],
+            condition: getWeatherCondition(weatherData.daily.weather_code[index]),
+          })),
+        };
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Showing weather for ${locationName}: ${formattedData.current.temperature.toFixed(1)}°C, ${formattedData.current.condition}`,
+            },
+          ],
+          _meta: {
+            viewUUID: randomUUID(),
+          },
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Weather error: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
     },
   );
 
