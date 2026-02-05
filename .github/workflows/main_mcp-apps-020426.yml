@@ -78,12 +78,6 @@ jobs:
         with:
           name: node-app
 
-      - name: Unzip artifact for deployment
-        run: |
-          unzip release.zip
-          mv deploy/* .
-          rm -rf deploy
-      
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -94,6 +88,5 @@ jobs:
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
         run: |
-          cd deploy
-          az webapp deploy --resource-group $(az webapp show --name MCP-Apps-020426 --query resourceGroup -o tsv) --name MCP-Apps-020426 --src-path ../release.zip --type zip --async false
+          az webapp deploy --resource-group $(az webapp show --name MCP-Apps-020426 --query resourceGroup -o tsv) --name MCP-Apps-020426 --src-path release.zip --type zip --async false
           
