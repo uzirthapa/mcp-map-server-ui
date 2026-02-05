@@ -117,68 +117,123 @@
             margin-top: 30px;
         }
 
+        .forecast-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
         .forecast-title {
             color: white;
             font-size: 1.5rem;
             font-weight: 600;
-            margin-bottom: 20px;
+            margin: 0;
+        }
+
+        .forecast-toggle {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .forecast-toggle:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.6);
+        }
+
+        .forecast-content {
+            display: none;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        .forecast-content.visible {
+            display: block;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .forecast-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px;
         }
 
         .forecast-card {
             background: rgba(255, 255, 255, 0.95);
-            border-radius: 15px;
-            padding: 20px;
+            border-radius: 12px;
+            padding: 12px 8px;
             text-align: center;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
             transition: transform 0.2s, box-shadow 0.2s;
+            min-width: 0;
         }
 
         .forecast-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.25);
         }
 
         .forecast-day {
-            font-size: 1.1rem;
+            font-size: 0.85rem;
             font-weight: 600;
             color: #333;
-            margin-bottom: 10px;
+            margin-bottom: 6px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .forecast-icon {
-            font-size: 60px;
-            margin: 10px 0;
+            font-size: 40px;
+            margin: 6px 0;
+            line-height: 1;
         }
 
         .forecast-temps {
             display: flex;
             justify-content: center;
-            gap: 10px;
-            margin-top: 10px;
+            gap: 6px;
+            margin-top: 6px;
         }
 
         .temp-high {
-            font-size: 1.3rem;
+            font-size: 1.1rem;
             font-weight: 700;
             color: #ff6b6b;
         }
 
         .temp-low {
-            font-size: 1.3rem;
+            font-size: 1.1rem;
             font-weight: 600;
             color: #4ecdc4;
         }
 
         .forecast-condition {
-            font-size: 0.9rem;
+            font-size: 0.75rem;
             color: #666;
-            margin-top: 8px;
+            margin-top: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .error-message {
@@ -400,7 +455,16 @@
             }
 
             .forecast-grid {
-                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+                grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+                gap: 6px;
+            }
+
+            .forecast-card {
+                padding: 10px 6px;
+            }
+
+            .forecast-icon {
+                font-size: 32px;
             }
 
             .search-container {

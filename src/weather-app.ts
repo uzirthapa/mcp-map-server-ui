@@ -49,9 +49,31 @@ const log = {
     logToHost(appInstance, "error", message, data),
 };
 
-// Preferred height for inline mode (px)
-// Increased to 1200px to fit all content without scrolling
-const PREFERRED_INLINE_HEIGHT = 1200;
+// Height components for dynamic calculation (px)
+// Values measured via Playwright testing on multiple screen sizes (948px and 768px widths)
+// Using maximum values to ensure no scrollbars on any screen size
+const HEIGHT_BASE = 969;              // Search, current weather, buttons (max from 768px: 1019 - 50)
+const HEIGHT_FORECAST = 262;          // 7-day forecast when visible (max from 768px)
+const HEIGHT_LOG_COLLAPSED = 50;      // Activity log header only
+const HEIGHT_LOG_EXPANDED = 349;      // Activity log header + content (measured: +299px from collapsed)
+
+// Track component visibility states
+let isForecastVisible = false;
+let isLogExpanded = false;
+
+/**
+ * Calculate and update viewport height based on visible components
+ */
+function updateViewportHeight(): void {
+  const forecastHeight = isForecastVisible ? HEIGHT_FORECAST : 0;
+  const logHeight = isLogExpanded ? HEIGHT_LOG_EXPANDED : HEIGHT_LOG_COLLAPSED;
+
+  const totalHeight = HEIGHT_BASE + forecastHeight + logHeight;
+
+  appInstance.sendSizeChanged({ height: totalHeight });
+
+  console.log(`[WEATHER-APP] Viewport height updated to ${totalHeight}px (base: ${HEIGHT_BASE}, forecast: ${forecastHeight}, log: ${logHeight})`);
+}
 
 interface WeatherData {
   location: string;
@@ -203,26 +225,39 @@ function renderWeather(data: WeatherData): void {
     </div>
 
     <div class="forecast-section">
-      <div class="forecast-title">7-Day Forecast</div>
-      <div class="forecast-grid">
-        ${data.forecast
-          .map(
-            (day, index) => `
-          <div class="forecast-card">
-            <div class="forecast-day">${getDayName(day.date, index)}</div>
-            <div class="forecast-icon">${getWeatherIcon(day.weatherCode)}</div>
-            <div class="forecast-temps">
-              <span class="temp-high">${Math.round(day.tempMax)}°</span>
-              <span class="temp-low">${Math.round(day.tempMin)}°</span>
+      <div class="forecast-header">
+        <div class="forecast-title">7-Day Forecast</div>
+        <button id="forecast-toggle-btn" class="forecast-toggle">
+          <span id="forecast-toggle-text">Show Forecast</span>
+          <span id="forecast-toggle-icon">▼</span>
+        </button>
+      </div>
+      <div id="forecast-content" class="forecast-content">
+        <div class="forecast-grid">
+          ${data.forecast
+            .map(
+              (day, index) => `
+            <div class="forecast-card">
+              <div class="forecast-day">${getDayName(day.date, index)}</div>
+              <div class="forecast-icon">${getWeatherIcon(day.weatherCode)}</div>
+              <div class="forecast-temps">
+                <span class="temp-high">${Math.round(day.tempMax)}°</span>
+                <span class="temp-low">${Math.round(day.tempMin)}°</span>
+              </div>
+              <div class="forecast-condition">${day.condition}</div>
             </div>
-            <div class="forecast-condition">${day.condition}</div>
-          </div>
-        `,
-          )
-          .join("")}
+          `,
+            )
+            .join("")}
+        </div>
       </div>
     </div>
   `;
+
+  // Set up forecast toggle after rendering
+  setTimeout(() => {
+    setupForecastToggle();
+  }, 0);
 
   log.info(`Weather rendered for ${data.location}`);
 }
@@ -385,12 +420,49 @@ function initializeLoggingPanel(): void {
 
   if (!header || !content || !toggle) return;
 
-  let isCollapsed = false;
+  // Start collapsed (isLogExpanded = false by default)
+  content.classList.add("collapsed");
+  toggle.textContent = "▶";
 
   header.addEventListener("click", () => {
-    isCollapsed = !isCollapsed;
-    content.classList.toggle("collapsed", isCollapsed);
-    toggle.textContent = isCollapsed ? "▶" : "▼";
+    isLogExpanded = !isLogExpanded;
+    content.classList.toggle("collapsed", !isLogExpanded);
+    toggle.textContent = isLogExpanded ? "▼" : "▶";
+
+    // Update viewport height dynamically
+    updateViewportHeight();
+
+    console.log(
+      `[WEATHER-APP] Activity log ${isLogExpanded ? "expanded" : "collapsed"}`,
+    );
+  });
+}
+
+/**
+ * Setup forecast toggle button
+ */
+function setupForecastToggle(): void {
+  const toggleBtn = document.getElementById("forecast-toggle-btn");
+  const forecastContent = document.getElementById("forecast-content");
+  const toggleText = document.getElementById("forecast-toggle-text");
+  const toggleIcon = document.getElementById("forecast-toggle-icon");
+
+  if (!toggleBtn || !forecastContent || !toggleText || !toggleIcon) return;
+
+  toggleBtn.addEventListener("click", async () => {
+    isForecastVisible = !isForecastVisible;
+    forecastContent.classList.toggle("visible", isForecastVisible);
+    toggleText.textContent = isForecastVisible ? "Hide Forecast" : "Show Forecast";
+    toggleIcon.textContent = isForecastVisible ? "▲" : "▼";
+
+    // Update viewport height dynamically
+    updateViewportHeight();
+
+    await log.info(
+      isForecastVisible
+        ? "7-day forecast expanded"
+        : "7-day forecast collapsed",
+    );
   });
 }
 
@@ -455,9 +527,9 @@ async function initialize() {
       container.style.display = "block";
     }
 
-    // Tell host our preferred size for inline mode
-    app.sendSizeChanged({ height: PREFERRED_INLINE_HEIGHT });
-    await log.info("Sent initial size", PREFERRED_INLINE_HEIGHT);
+    // Set initial viewport height (forecast hidden, log collapsed)
+    updateViewportHeight();
+    await log.info("Sent initial size");
 
     // Initialize interactive features
     initializeQuickCities();
