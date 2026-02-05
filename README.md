@@ -202,17 +202,38 @@ SERVERS='["http://localhost:3001/mcp"]' npm start
 
 Open `http://localhost:8080` and test the tools.
 
-### Option 2: Claude (Web or Desktop)
+### Option 2: Claude (Web or Desktop) - **Recommended for Model Context Testing**
 
 Use [custom connectors](https://support.anthropic.com/en/articles/11175166-getting-started-with-custom-connectors-using-remote-mcp) to connect Claude to your deployed server.
 
-For local testing, use `cloudflared` tunnel:
+**For local testing with Claude Desktop:**
+```json
+// Add to claude_desktop_config.json
+{
+  "mcpServers": {
+    "weather-map": {
+      "command": "node",
+      "args": ["/path/to/mcp-map-server-ui/dist/index.js", "--stdio"]
+    }
+  }
+}
+```
 
+**For Claude Web with local server:**
 ```bash
 npx cloudflared tunnel --url http://localhost:3001
 ```
-
 Add the generated URL as a custom connector in Claude settings.
+
+**For Claude Web with Azure deployment:**
+- Add custom connector with URL: `https://mcp-apps-020426.azurewebsites.net/mcp`
+
+**Testing Model Context Updates:**
+1. Say: "Show me the weather in Tokyo"
+2. Then ask: "What's the current temperature?" or "Should I bring an umbrella?"
+3. Claude should answer using the model context! ✨
+
+See [TESTING_GUIDE.md](./TESTING_GUIDE.md) for detailed testing instructions.
 
 ### Option 3: VS Code (Insiders)
 

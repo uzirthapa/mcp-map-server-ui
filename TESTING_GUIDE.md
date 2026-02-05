@@ -125,6 +125,94 @@ User: "Show me the weather in Seattle"
 - "Tell Claude" always sends current location
 - Log count keeps incrementing
 
+#### Test 9: Model Context Updates (Phase 3 - updateModelContext)
+**What it does:** Sends current weather data to Claude's context so Claude knows the weather without you explicitly mentioning it.
+
+**How to test with Claude:**
+
+1. **Setup Claude Connection** (choose one):
+   - **Claude Desktop**: Add to `claude_desktop_config.json`:
+     ```json
+     {
+       "mcpServers": {
+         "weather-map": {
+           "command": "node",
+           "args": ["/path/to/dist/index.js", "--stdio"]
+         }
+       }
+     }
+     ```
+   - **Claude Web**: Add custom connector with URL `https://mcp-apps-020426.azurewebsites.net/mcp`
+
+2. **Load weather data**:
+   ```
+   You: "Show me the weather in Tokyo"
+   ```
+   [Weather UI appears showing 15°C, Partly Cloudy, etc.]
+
+3. **Ask context-aware questions** (without mentioning the weather directly):
+   ```
+   You: "What's the current temperature?"
+   Claude: "It's currently 15°C" ✅
+
+   You: "Should I bring an umbrella?"
+   Claude: "No need - it's partly cloudy with no rain expected" ✅
+
+   You: "What's the UV index?"
+   Claude: "The UV index is 3.2" ✅
+   ```
+
+**Expected:**
+- Claude answers using the model context data
+- Claude knows: temperature, conditions, humidity, wind, UV index
+- No need to repeat information - Claude has it in context!
+
+**What's sent to Claude's context:**
+```
+"Current weather in Tokyo (35.68°, 139.69°): 15°C, Partly Cloudy.
+Feels like 13°C. Humidity: 65%, Wind: 12 km/h, UV Index: 3.2.
+7-day forecast available."
+```
+
+**Debugging:**
+- Check basic-host "Model Context" section to see what was sent
+- Look for log: "Updated model context with weather data"
+- Host should show context update in its logs
+
+#### Test 10: Bookmarks with Notes (Phase 3)
+**What it does:** Save locations with custom notes for quick reference.
+
+**How to test:**
+
+1. **Add a bookmark**:
+   - Load weather for any location
+   - Click the 📍 bookmark button (next to ⭐ favorite)
+   - Modal opens with "📌 Add Bookmark" title
+   - Type a note: "Great coffee shops here! Visit in spring."
+   - Click "Save"
+   - Icon changes from 📍 to 📌
+
+2. **Edit a bookmark**:
+   - Click the 📌 button
+   - Modal opens with "📌 Edit Bookmark" title
+   - Your saved note appears in the textarea
+   - Timestamps shown: "Added: ..." and "Updated: ..."
+   - Modify the note
+   - Click "Save" or "Delete"
+
+3. **Persistence test**:
+   - Add a bookmark with notes
+   - Reload the page or search for a different location
+   - Come back to the bookmarked location
+   - Click 📌 - your note should still be there!
+
+**Expected:**
+- Bookmark persists across sessions (localStorage)
+- Edit modal shows existing note
+- Timestamps update correctly
+- Delete removes bookmark (icon changes back to 📍)
+- Log shows: "Added bookmark for [location]"
+
 ## 🔍 MCP Apps APIs Being Tested
 
 | API | Feature | Test Method |
@@ -135,6 +223,8 @@ User: "Show me the weather in Seattle"
 | `sendOpenLink()` | Open web | Click "View on Weather.com" |
 | `sendLog()` | Activity log | All actions automatically log |
 | `sendSizeChanged()` | Size hint | Automatic on load (800px) |
+| `updateModelContext()` | Model context | Ask Claude about weather data |
+| localStorage | Bookmarks | Add/edit/delete bookmarks with notes |
 
 ## 📊 Expected Log Sequence
 
