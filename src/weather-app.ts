@@ -50,12 +50,11 @@ const log = {
 };
 
 // Height components for dynamic calculation (px)
-// Values measured via Playwright testing on multiple screen sizes (948px and 768px widths)
-// Using maximum values to ensure no scrollbars on any screen size
-const HEIGHT_BASE = 969;              // Search, current weather, buttons (max from 768px: 1019 - 50)
-const HEIGHT_FORECAST = 262;          // 7-day forecast when visible (max from 768px)
+// Optimized for Claude UI (800x1000 viewport with ~100px host chrome)
+const HEIGHT_BASE = 740;              // Search, current weather, buttons (ultra-compact)
+const HEIGHT_FORECAST = 210;          // 7-day forecast when visible (minimal cards, fits 1000px exactly)
 const HEIGHT_LOG_COLLAPSED = 50;      // Activity log header only
-const HEIGHT_LOG_EXPANDED = 349;      // Activity log header + content (measured: +299px from collapsed)
+const HEIGHT_LOG_EXPANDED = 349;      // Activity log header + content
 
 // Track component visibility states
 let isForecastVisible = false;
