@@ -29,17 +29,33 @@ jobs:
           npm run build --if-present
           npm run test --if-present
 
-      - name: Zip artifact for deployment
+      - name: Create minimal deployment package
         run: |
-          # Create a clean deployment package with built files and dependencies
-          mkdir -p deploy
-          cp -r dist deploy/
-          cp package.json deploy/
-          cp package-lock.json deploy/
-          cp .deployment deploy/
-          cp .npmrc deploy/
+          # Create a minimal deployment package with only runtime dependencies
+          mkdir -p deploy/dist
+          cp -r dist/* deploy/dist/
+
+          # Create minimal package.json with only runtime deps
+          cat > deploy/package.json << 'EOF'
+          {
+            "name": "mcp-map-server",
+            "version": "1.0.0",
+            "type": "module",
+            "scripts": {
+              "start": "node --experimental-specifier-resolution=node dist/index.js"
+            },
+            "dependencies": {
+              "@modelcontextprotocol/ext-apps": "^1.0.0",
+              "@modelcontextprotocol/sdk": "^1.24.0",
+              "cors": "^2.8.5",
+              "express": "^5.1.0",
+              "zod": "^4.1.13"
+            }
+          }
+          EOF
+
           cd deploy
-          npm install --production
+          npm install --production --no-optional --ignore-scripts
           cd ..
           zip -r release.zip deploy/
 
@@ -77,9 +93,7 @@ jobs:
 
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: 'MCP-Apps-020426'
-          slot-name: 'Production'
-          package: .
+        run: |
+          cd deploy
+          az webapp deploy --resource-group $(az webapp show --name MCP-Apps-020426 --query resourceGroup -o tsv) --name MCP-Apps-020426 --src-path ../release.zip --type zip --async false
           
