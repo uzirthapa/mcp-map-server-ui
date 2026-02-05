@@ -727,6 +727,68 @@
             transform: scale(1.1);
         }
 
+        .close-bookmark {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            font-size: 2rem;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+
+        .close-bookmark:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        .bookmark-save-btn, .bookmark-cancel-btn, .bookmark-delete-btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+        }
+
+        .bookmark-save-btn {
+            background: #667eea;
+            color: white;
+        }
+
+        .bookmark-save-btn:hover {
+            background: #5568d3;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .bookmark-cancel-btn {
+            background: #e5e7eb;
+            color: #333;
+        }
+
+        .bookmark-cancel-btn:hover {
+            background: #d1d5db;
+        }
+
+        .bookmark-delete-btn {
+            background: #ef4444;
+            color: white;
+        }
+
+        .bookmark-delete-btn:hover {
+            background: #dc2626;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+        }
+
         .insights-body {
             padding: 24px;
         }

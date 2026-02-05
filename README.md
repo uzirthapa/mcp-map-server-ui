@@ -59,7 +59,7 @@ CesiumJS-based globe with OpenStreetMap tiles for geographic visualization.
 | **Theme Detection** | 🟢 Complete | Both apps detect and apply light/dark themes |
 | **State Persistence** | 🟢 Complete | Weather: favorites + search history, Map: camera position |
 | **Progressive Streaming** | 🟢 Complete | Weather app: 5-phase streaming analysis tool |
-| **Model Context Updates** | 🟡 Partial | Map sends screenshots, weather doesn't |
+| **Model Context Updates** | 🟢 Complete | Both apps send context updates (map: screenshots, weather: text summary) |
 
 ### **Not Yet Implemented** ❌
 
@@ -834,14 +834,14 @@ Ensure your deployment exposes the `/mcp` endpoint and supports:
 - [x] Responsive layouts per mode
 - [x] PiP mode CSS (ready for host support)
 
-### Phase 3: Persistence & State (✅ Complete)
+### Phase 3: Persistence & Context (✅ Complete)
 - [x] Favorites management (⭐ star button)
 - [x] Search history (localStorage)
 - [x] Cross-session persistence (viewUUID-based keys)
 - [x] Progressive streaming analysis (5 phases)
 - [x] Compact viewport design (790px, mobile-optimized)
-- [ ] Model context updates (weather)
-- [ ] Bookmark locations with notes
+- [x] Model context updates (weather app sends current weather to Claude)
+- [x] Bookmark locations with notes (📌 button with custom notes)
 
 ### Phase 4: Advanced Features (🚧 In Progress)
 - [x] Progressive streaming tool (uzir-weather-stream)

@@ -71,11 +71,24 @@ interface SearchHistoryEntry {
 }
 
 /**
+ * Bookmark with user notes
+ */
+interface BookmarkedLocation {
+  location: string;
+  latitude: number;
+  longitude: number;
+  note: string;
+  addedAt: number; // timestamp
+  updatedAt: number; // timestamp
+}
+
+/**
  * Persisted state for weather app
  */
 interface PersistedWeatherState {
   favorites: FavoriteLocation[];
   searchHistory: SearchHistoryEntry[];
+  bookmarks: BookmarkedLocation[];
   lastLocation?: string;
 }
 
@@ -86,6 +99,7 @@ function loadPersistedState(): PersistedWeatherState {
   const defaultState: PersistedWeatherState = {
     favorites: [],
     searchHistory: [],
+    bookmarks: [],
   };
 
   if (!viewUUID) return defaultState;
@@ -98,6 +112,7 @@ function loadPersistedState(): PersistedWeatherState {
     return {
       favorites: Array.isArray(state.favorites) ? state.favorites : [],
       searchHistory: Array.isArray(state.searchHistory) ? state.searchHistory : [],
+      bookmarks: Array.isArray(state.bookmarks) ? state.bookmarks : [],
       lastLocation: state.lastLocation,
     };
   } catch (error) {
@@ -124,6 +139,7 @@ function savePersistedState(state: PersistedWeatherState): void {
 let persistedState: PersistedWeatherState = {
   favorites: [],
   searchHistory: [],
+  bookmarks: [],
 };
 
 /**
@@ -190,6 +206,72 @@ function removeFromFavorites(location: string): void {
 function isFavorited(location: string): boolean {
   return persistedState.favorites.some(
     (fav) => fav.location.toLowerCase() === location.toLowerCase()
+  );
+}
+
+/**
+ * Add or update bookmark for location
+ */
+function addOrUpdateBookmark(
+  location: string,
+  latitude: number,
+  longitude: number,
+  note: string,
+): void {
+  const existingIndex = persistedState.bookmarks.findIndex(
+    (bm) => bm.location.toLowerCase() === location.toLowerCase()
+  );
+
+  const now = Date.now();
+
+  if (existingIndex >= 0) {
+    // Update existing bookmark
+    persistedState.bookmarks[existingIndex].note = note;
+    persistedState.bookmarks[existingIndex].updatedAt = now;
+    log.info(`Updated bookmark for ${location}`);
+  } else {
+    // Add new bookmark
+    persistedState.bookmarks.push({
+      location,
+      latitude,
+      longitude,
+      note,
+      addedAt: now,
+      updatedAt: now,
+    });
+    log.info(`Added bookmark for ${location}`);
+  }
+
+  savePersistedState(persistedState);
+}
+
+/**
+ * Remove bookmark from location
+ */
+function removeBookmark(location: string): void {
+  persistedState.bookmarks = persistedState.bookmarks.filter(
+    (bm) => bm.location.toLowerCase() !== location.toLowerCase()
+  );
+
+  savePersistedState(persistedState);
+  log.info(`Removed bookmark from ${location}`);
+}
+
+/**
+ * Get bookmark for location
+ */
+function getBookmark(location: string): BookmarkedLocation | undefined {
+  return persistedState.bookmarks.find(
+    (bm) => bm.location.toLowerCase() === location.toLowerCase()
+  );
+}
+
+/**
+ * Check if location is bookmarked
+ */
+function isBookmarked(location: string): boolean {
+  return persistedState.bookmarks.some(
+    (bm) => bm.location.toLowerCase() === location.toLowerCase()
   );
 }
 
@@ -380,6 +462,26 @@ function getDayName(dateString: string, index: number): string {
 }
 
 /**
+ * Update Claude's context with current weather data
+ */
+async function updateWeatherContext(data: WeatherData): Promise<void> {
+  try {
+    const text = `Current weather in ${data.location} (${data.latitude.toFixed(2)}°, ${data.longitude.toFixed(2)}°): ${Math.round(data.current.temperature)}°C, ${data.current.condition}. Feels like ${Math.round(data.current.feelsLike)}°C. Humidity: ${data.current.humidity}%, Wind: ${Math.round(data.current.windSpeed)} km/h, UV Index: ${data.current.uvIndex.toFixed(1)}. 7-day forecast available.`;
+
+    await appInstance.updateModelContext({
+      content: [{ type: "text", text }],
+    });
+
+    log.info("Updated model context with weather data");
+  } catch (error) {
+    log.warn(
+      "Failed to update model context",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
+/**
  * Render the weather dashboard
  */
 function renderWeather(data: WeatherData): void {
@@ -393,12 +495,15 @@ function renderWeather(data: WeatherData): void {
 
   const favorited = isFavorited(data.location);
   const starIcon = favorited ? "⭐" : "☆";
+  const bookmarked = isBookmarked(data.location);
+  const bookmarkIcon = bookmarked ? "📌" : "📍";
 
   weatherContent.innerHTML = `
     <div class="location-header">
       <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
         <h1>${data.location}</h1>
         <button id="favorite-btn" class="favorite-btn" title="${favorited ? "Remove from favorites" : "Add to favorites"}">${starIcon}</button>
+        <button id="bookmark-btn" class="favorite-btn" title="${bookmarked ? "View/edit bookmark" : "Add bookmark with note"}">${bookmarkIcon}</button>
       </div>
       <p>${data.latitude.toFixed(2)}°, ${data.longitude.toFixed(2)}°</p>
     </div>
@@ -461,11 +566,15 @@ function renderWeather(data: WeatherData): void {
     </div>
   `;
 
-  // Set up forecast toggle and favorite button after rendering
+  // Set up forecast toggle, favorite button, and bookmark button after rendering
   setTimeout(() => {
     setupForecastToggle();
     setupFavoriteButton(data);
+    setupBookmarkButton(data);
   }, 0);
+
+  // Update Claude's context with the new weather data
+  updateWeatherContext(data);
 
   log.info(`Weather rendered for ${data.location}`);
 }
@@ -486,6 +595,118 @@ function setupFavoriteButton(data: WeatherData): void {
       addToFavorites(data.location, data.latitude, data.longitude);
       favoriteBtn.textContent = "⭐";
       favoriteBtn.title = "Remove from favorites";
+    }
+  });
+}
+
+/**
+ * Setup bookmark button handler
+ */
+function setupBookmarkButton(data: WeatherData): void {
+  const bookmarkBtn = document.getElementById("bookmark-btn");
+  if (!bookmarkBtn) return;
+
+  bookmarkBtn.addEventListener("click", () => {
+    showBookmarkModal(data);
+  });
+}
+
+/**
+ * Show bookmark modal for adding/editing notes
+ */
+function showBookmarkModal(data: WeatherData): void {
+  const existing = getBookmark(data.location);
+  const isEdit = !!existing;
+
+  const modal = document.createElement("div");
+  modal.className = "insights-modal bookmark-modal";
+  modal.innerHTML = `
+    <div class="insights-content" style="max-width: 500px;">
+      <div class="insights-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+        <h2>📌 ${isEdit ? "Edit" : "Add"} Bookmark</h2>
+        <button class="close-bookmark">×</button>
+      </div>
+      <div class="insights-body">
+        <div style="margin-bottom: 16px;">
+          <h3 style="margin: 0 0 8px 0;">${data.location}</h3>
+          <p style="margin: 0; color: #666; font-size: 14px;">${data.latitude.toFixed(2)}°, ${data.longitude.toFixed(2)}°</p>
+        </div>
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600;">Note:</label>
+          <textarea id="bookmark-note" style="width: 100%; min-height: 100px; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 14px; resize: vertical;" placeholder="Add your notes about this location...">${existing?.note || ""}</textarea>
+        </div>
+        <div style="display: flex; gap: 12px; justify-content: flex-end;">
+          ${isEdit ? '<button id="delete-bookmark-btn" class="bookmark-delete-btn" style="margin-right: auto;">Delete</button>' : ""}
+          <button id="cancel-bookmark-btn" class="bookmark-cancel-btn">Cancel</button>
+          <button id="save-bookmark-btn" class="bookmark-save-btn">Save</button>
+        </div>
+        ${isEdit ? `<div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee; font-size: 12px; color: #999;">
+          Added: ${new Date(existing!.addedAt).toLocaleString()}<br>
+          Updated: ${new Date(existing!.updatedAt).toLocaleString()}
+        </div>` : ""}
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const noteTextarea = document.getElementById("bookmark-note") as HTMLTextAreaElement;
+  const saveBtn = document.getElementById("save-bookmark-btn");
+  const cancelBtn = document.getElementById("cancel-bookmark-btn");
+  const deleteBtn = document.getElementById("delete-bookmark-btn");
+  const closeBtn = modal.querySelector(".close-bookmark");
+
+  const closeModal = () => modal.remove();
+
+  // Focus textarea
+  setTimeout(() => noteTextarea.focus(), 100);
+
+  // Save handler
+  saveBtn?.addEventListener("click", () => {
+    const note = noteTextarea.value.trim();
+    if (!note) {
+      alert("Please enter a note");
+      return;
+    }
+
+    addOrUpdateBookmark(data.location, data.latitude, data.longitude, note);
+
+    // Update button icon
+    const bookmarkBtn = document.getElementById("bookmark-btn");
+    if (bookmarkBtn) {
+      bookmarkBtn.textContent = "📌";
+      bookmarkBtn.title = "View/edit bookmark";
+    }
+
+    closeModal();
+  });
+
+  // Cancel handler
+  cancelBtn?.addEventListener("click", closeModal);
+
+  // Delete handler
+  deleteBtn?.addEventListener("click", () => {
+    if (confirm(`Remove bookmark from ${data.location}?`)) {
+      removeBookmark(data.location);
+
+      // Update button icon
+      const bookmarkBtn = document.getElementById("bookmark-btn");
+      if (bookmarkBtn) {
+        bookmarkBtn.textContent = "📍";
+        bookmarkBtn.title = "Add bookmark with note";
+      }
+
+      closeModal();
+    }
+  });
+
+  // Close button handler
+  closeBtn?.addEventListener("click", closeModal);
+
+  // Close on backdrop click
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) {
+      closeModal();
     }
   });
 }
