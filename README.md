@@ -6,6 +6,20 @@ Comprehensive MCP Apps capability testing suite featuring a Weather Dashboard an
 
 This server demonstrates and tests the full spectrum of MCP Apps capabilities through interactive UI applications that communicate bidirectionally with MCP servers and host applications.
 
+## 🆕 Recent Updates
+
+### Progressive Weather Streaming Analysis (Latest)
+- ✨ **New Tool**: `uzir-weather-stream` - Progressive 5-phase weather analysis
+- 🌊 **Real-time Updates**: Data streams in at 1-second intervals
+- 🎨 **Beautiful UI**: Full-screen modal with progress bar and animated phase arrivals
+- 📊 **5 Analysis Phases**: Conditions → Patterns → Historical → Forecast → Recommendations
+- 🔒 **App-Only**: Tool is hidden from model, only callable by the app
+- 📱 **Compact Design**: Optimized viewport (790px base, 20% smaller on mobile)
+- ⭐ **Persistence**: Favorites and search history with localStorage
+- 📚 **Documentation**: New [CUSTOM-API-GUIDE.md](./CUSTOM-API-GUIDE.md) with implementation details
+
+**Try it:** Load weather for any city, click "🌊 Stream Analysis" button!
+
 ## 📦 What's Included
 
 ### 1. **Weather Dashboard** (Primary Test App)
@@ -43,7 +57,8 @@ CesiumJS-based globe with OpenStreetMap tiles for geographic visualization.
 | **Host Context** | 🟢 Complete | Both apps read display mode and theme via `onhostcontextchanged` |
 | **Keyboard Shortcuts** | 🟢 Complete | Both apps: Esc (exit fullscreen), Ctrl+Enter (toggle) |
 | **Theme Detection** | 🟢 Complete | Both apps detect and apply light/dark themes |
-| **State Persistence** | 🟡 Partial | Map uses localStorage, weather doesn't |
+| **State Persistence** | 🟢 Complete | Weather: favorites + search history, Map: camera position |
+| **Progressive Streaming** | 🟢 Complete | Weather app: 5-phase streaming analysis tool |
 | **Model Context Updates** | 🟡 Partial | Map sends screenshots, weather doesn't |
 
 ### **Not Yet Implemented** ❌
@@ -75,6 +90,8 @@ The Weather Dashboard is the primary testing application demonstrating core MCP 
 - ⛶ **Fullscreen Mode** - Toggle display modes with `requestDisplayMode()`
 - 🎨 **Theme Detection** - Responds to light/dark mode changes
 - ⌨️ **Keyboard Shortcuts** - Ctrl+Enter (toggle fullscreen), Escape (exit)
+- 🌊 **Progressive Streaming Analysis** - Live 5-phase weather analysis with real-time updates
+- ⭐ **Favorites & History** - Save favorite locations and search history (localStorage)
 
 ### **Weather Data**
 - Current conditions with temperature, humidity, wind speed, UV index
@@ -82,13 +99,37 @@ The Weather Dashboard is the primary testing application demonstrating core MCP 
 - Weather condition icons
 - Geo-coordinates display
 
+### **Progressive Streaming Analysis** 🆕
+The weather dashboard includes an advanced streaming tool that demonstrates **progressive data delivery**:
+
+- **5 Streaming Phases** - Data arrives in real-time over 5 seconds
+  1. **Current Conditions** (1s) - Live temperature, humidity, wind, pressure
+  2. **Pattern Analysis** (2s) - Temperature trends, precipitation risk
+  3. **Historical Comparison** (3s) - Deviations from averages, unusual factors
+  4. **Forecast Predictions** (4s) - Short-term and medium-term forecasts
+  5. **Recommendations** (5s) - Clothing and activity suggestions
+
+- **Beautiful Streaming UI**
+  - Full-screen modal with animated phase arrivals
+  - Progress bar showing completion status
+  - Real-time timestamps for each phase
+  - Color-coded sections with green gradient headers
+  - Responsive grid layouts for data display
+
+- **App-Only Tool** - `uzir-weather-stream` is hidden from the model and only callable by the app
+- **Simulated Real-Time Updates** - Demonstrates "multiple values over time" pattern
+
+**How to test:** Load any weather location, click "🌊 Stream Analysis" button, watch phases arrive progressively!
+
 ### **Technical Details**
 - Uses Open-Meteo API (no API key required)
 - OpenStreetMap Nominatim for geocoding
-- Dynamic viewport height (969-1580px based on visible components)
-- Responsive design
+- Compact viewport height (790px base, expands dynamically)
+- Mobile-optimized design (20% smaller on ≤600px screens)
+- Responsive design with media queries
 - Theme adaptation (light/dark backgrounds)
 - Error handling and recovery
+- localStorage persistence for favorites and search history
 
 ---
 
@@ -589,6 +630,33 @@ Display weather dashboard for a location.
 
 Returns weather dashboard UI with current conditions and 7-day forecast.
 
+### `uzir-weather-stream` (App-Only)
+
+Progressive weather analysis streaming tool with 5 phases of data delivered over time.
+
+**Visibility:** App-only (hidden from model)
+
+**Parameters:**
+- `location` (string, optional) - City or place name
+- `latitude` (number, optional) - Latitude coordinate
+- `longitude` (number, optional) - Longitude coordinate
+
+**Example:**
+```json
+{
+  "location": "Tokyo"
+}
+```
+
+**Returns:** Streaming analysis with 5 phases:
+1. Current Conditions (temperature, humidity, wind, pressure)
+2. Pattern Analysis (trends, precipitation risk)
+3. Historical Comparison (deviations, unusual factors)
+4. Forecast Predictions (short-term, medium-term)
+5. Recommendations (clothing, activities)
+
+Data arrives progressively at 1-second intervals, demonstrating "multiple values over time" streaming pattern.
+
 ### `show-map`
 
 Display 3D globe at a bounding box location.
@@ -723,6 +791,7 @@ mcp-map-server-ui/
 ├── vite.config.ts
 ├── tsconfig.json
 ├── TESTING_GUIDE.md         # Detailed testing instructions
+├── CUSTOM-API-GUIDE.md      # Progressive streaming API extension guide
 └── README.md                # This file
 ```
 
@@ -765,19 +834,22 @@ Ensure your deployment exposes the `/mcp` endpoint and supports:
 - [x] Responsive layouts per mode
 - [x] PiP mode CSS (ready for host support)
 
-### Phase 3: Persistence & State (Next)
-- [ ] Favorites management
-- [ ] Search history
-- [ ] Bookmark locations
-- [ ] Cross-session persistence
+### Phase 3: Persistence & State (✅ Complete)
+- [x] Favorites management (⭐ star button)
+- [x] Search history (localStorage)
+- [x] Cross-session persistence (viewUUID-based keys)
+- [x] Progressive streaming analysis (5 phases)
+- [x] Compact viewport design (790px, mobile-optimized)
 - [ ] Model context updates (weather)
+- [ ] Bookmark locations with notes
 
-### Phase 4: Advanced Features
+### Phase 4: Advanced Features (🚧 In Progress)
+- [x] Progressive streaming tool (uzir-weather-stream)
+- [x] Real-time phase-based updates
 - [ ] Comparison mode (multiple locations)
-- [ ] Real-time updates and auto-refresh
 - [ ] Tool list change notifications
 - [ ] Advanced forms and validation
-- [ ] Keyboard shortcuts (weather)
+- [ ] Keyboard shortcuts (weather-specific)
 
 ### Phase 5: Polish & Production
 - [ ] Full accessibility (ARIA, screen reader)
