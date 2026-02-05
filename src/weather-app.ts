@@ -49,6 +49,150 @@ const log = {
     logToHost(appInstance, "error", message, data),
 };
 
+// Phase 3: Persistence & State
+let viewUUID: string | null = null; // Storage key from tool result metadata
+
+/**
+ * Favorite location for quick access
+ */
+interface FavoriteLocation {
+  location: string;
+  latitude: number;
+  longitude: number;
+  addedAt: number; // timestamp
+}
+
+/**
+ * Search history entry
+ */
+interface SearchHistoryEntry {
+  location: string;
+  timestamp: number;
+}
+
+/**
+ * Persisted state for weather app
+ */
+interface PersistedWeatherState {
+  favorites: FavoriteLocation[];
+  searchHistory: SearchHistoryEntry[];
+  lastLocation?: string;
+}
+
+/**
+ * Load persisted state from localStorage
+ */
+function loadPersistedState(): PersistedWeatherState {
+  const defaultState: PersistedWeatherState = {
+    favorites: [],
+    searchHistory: [],
+  };
+
+  if (!viewUUID) return defaultState;
+
+  try {
+    const stored = localStorage.getItem(`weather-state-${viewUUID}`);
+    if (!stored) return defaultState;
+
+    const state = JSON.parse(stored) as PersistedWeatherState;
+    return {
+      favorites: Array.isArray(state.favorites) ? state.favorites : [],
+      searchHistory: Array.isArray(state.searchHistory) ? state.searchHistory : [],
+      lastLocation: state.lastLocation,
+    };
+  } catch (error) {
+    console.warn("Failed to load persisted state:", error);
+    return defaultState;
+  }
+}
+
+/**
+ * Save state to localStorage
+ */
+function savePersistedState(state: PersistedWeatherState): void {
+  if (!viewUUID) return;
+
+  try {
+    localStorage.setItem(`weather-state-${viewUUID}`, JSON.stringify(state));
+    console.log("[WEATHER-APP] Saved persisted state");
+  } catch (error) {
+    console.warn("Failed to save persisted state:", error);
+  }
+}
+
+// Current persisted state
+let persistedState: PersistedWeatherState = {
+  favorites: [],
+  searchHistory: [],
+};
+
+/**
+ * Add location to search history
+ */
+function addToSearchHistory(location: string): void {
+  // Remove duplicates
+  persistedState.searchHistory = persistedState.searchHistory.filter(
+    (entry) => entry.location.toLowerCase() !== location.toLowerCase()
+  );
+
+  // Add to beginning
+  persistedState.searchHistory.unshift({
+    location,
+    timestamp: Date.now(),
+  });
+
+  // Keep only last 10
+  persistedState.searchHistory = persistedState.searchHistory.slice(0, 10);
+
+  savePersistedState(persistedState);
+}
+
+/**
+ * Add location to favorites
+ */
+function addToFavorites(location: string, latitude: number, longitude: number): void {
+  // Check if already favorited
+  const exists = persistedState.favorites.some(
+    (fav) => fav.location.toLowerCase() === location.toLowerCase()
+  );
+
+  if (exists) {
+    log.warn("Location already in favorites");
+    return;
+  }
+
+  persistedState.favorites.push({
+    location,
+    latitude,
+    longitude,
+    addedAt: Date.now(),
+  });
+
+  savePersistedState(persistedState);
+  log.info(`Added ${location} to favorites`);
+}
+
+/**
+ * Remove location from favorites
+ */
+function removeFromFavorites(location: string): void {
+  persistedState.favorites = persistedState.favorites.filter(
+    (fav) => fav.location.toLowerCase() !== location.toLowerCase()
+  );
+
+  savePersistedState(persistedState);
+  log.info(`Removed ${location} from favorites`);
+}
+
+/**
+ * Check if location is favorited
+ */
+function isFavorited(location: string): boolean {
+  return persistedState.favorites.some(
+    (fav) => fav.location.toLowerCase() === location.toLowerCase()
+  );
+}
+
 // Height components for dynamic calculation (px)
 // Optimized for Claude UI (800x1000 viewport with ~100px host chrome)
 const HEIGHT_BASE = 740;              // Search, current weather, buttons (ultra-compact)
@@ -247,9 +391,15 @@ function renderWeather(data: WeatherData): void {
 
   const currentIcon = getWeatherIcon(data.current.weatherCode);
 
+  const favorited = isFavorited(data.location);
+  const starIcon = favorited ? "⭐" : "☆";
+
   weatherContent.innerHTML = `
     <div class="location-header">
-      <h1>${data.location}</h1>
+      <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
+        <h1>${data.location}</h1>
+        <button id="favorite-btn" class="favorite-btn" title="${favorited ? "Remove from favorites" : "Add to favorites"}">${starIcon}</button>
+      </div>
       <p>${data.latitude.toFixed(2)}°, ${data.longitude.toFixed(2)}°</p>
     </div>
 
@@ -311,12 +461,33 @@ function renderWeather(data: WeatherData): void {
     </div>
   `;
 
-  // Set up forecast toggle after rendering
+  // Set up forecast toggle and favorite button after rendering
   setTimeout(() => {
     setupForecastToggle();
+    setupFavoriteButton(data);
   }, 0);
 
   log.info(`Weather rendered for ${data.location}`);
+}
+
+/**
+ * Setup favorite button handler
+ */
+function setupFavoriteButton(data: WeatherData): void {
+  const favoriteBtn = document.getElementById("favorite-btn");
+  if (!favoriteBtn) return;
+
+  favoriteBtn.addEventListener("click", () => {
+    if (isFavorited(data.location)) {
+      removeFromFavorites(data.location);
+      favoriteBtn.textContent = "☆";
+      favoriteBtn.title = "Add to favorites";
+    } else {
+      addToFavorites(data.location, data.latitude, data.longitude);
+      favoriteBtn.textContent = "⭐";
+      favoriteBtn.title = "Remove from favorites";
+    }
+  });
 }
 
 /**
@@ -377,6 +548,9 @@ async function searchLocation(location: string): Promise<void> {
     if (weatherData) {
       renderWeather(weatherData);
       hideLoading();
+
+      // Add to search history
+      addToSearchHistory(weatherData.location);
     } else {
       showError("No weather data in response");
     }
@@ -552,12 +726,24 @@ app.ontoolinput = async (params) => {
 app.ontoolresult = async (result) => {
   await log.info("Received tool result from server");
 
+  // Extract viewUUID for localStorage key
+  if (result._meta?.viewUUID && !viewUUID) {
+    viewUUID = result._meta.viewUUID as string;
+    // Load persisted state
+    persistedState = loadPersistedState();
+    await log.info("Loaded persisted state", { favorites: persistedState.favorites.length, history: persistedState.searchHistory.length });
+  }
+
   const weatherData = result._meta?.weatherData as WeatherData | undefined;
 
   if (weatherData) {
     try {
       renderWeather(weatherData);
       hideLoading();
+
+      // Add to search history
+      addToSearchHistory(weatherData.location);
+
       await log.info("Initial weather data rendered", weatherData.location);
     } catch (error) {
       await log.error(
