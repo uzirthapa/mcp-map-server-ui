@@ -2,17 +2,56 @@
  * Weather Dashboard MCP App
  *
  * Displays weather information using Open-Meteo API data.
+ * Tests MCP Apps communication capabilities: sendLog, sendMessage, sendOpenLink, callServerTool
  */
 import { App } from "@modelcontextprotocol/ext-apps";
 
+// Logging utilities that also send to host
+const logToHost = async (
+  app: App,
+  level: "info" | "warning" | "error",
+  message: string,
+  data?: unknown,
+) => {
+  const timestamp = new Date().toLocaleTimeString();
+  const logMessage = data
+    ? `${message} ${JSON.stringify(data)}`
+    : message;
+
+  // Console log (use warn for warning level)
+  const consoleLevel = level === "warning" ? "warn" : level;
+  console[consoleLevel](`[WEATHER-APP] ${logMessage}`);
+
+  // Send to host via sendLog
+  try {
+    await app.sendLog({
+      level,
+      data: logMessage,
+      logger: "weather-app",
+    });
+  } catch (error) {
+    console.error("Failed to send log to host:", error);
+  }
+
+  // Update UI log panel (use warn for UI display)
+  const uiLevel = level === "warning" ? "warn" : level;
+  addLogEntry(uiLevel, timestamp, logMessage);
+};
+
+// Create log object that uses logToHost
+let appInstance: App;
 const log = {
-  info: console.log.bind(console, "[WEATHER-APP]"),
-  warn: console.warn.bind(console, "[WEATHER-APP]"),
-  error: console.error.bind(console, "[WEATHER-APP]"),
+  info: (message: string, data?: unknown) =>
+    logToHost(appInstance, "info", message, data),
+  warn: (message: string, data?: unknown) =>
+    logToHost(appInstance, "warning", message, data),
+  error: (message: string, data?: unknown) =>
+    logToHost(appInstance, "error", message, data),
 };
 
 // Preferred height for inline mode (px)
-const PREFERRED_INLINE_HEIGHT = 600;
+// Increased to 1200px to fit all content without scrolling
+const PREFERRED_INLINE_HEIGHT = 1200;
 
 interface WeatherData {
   location: string;
@@ -34,6 +73,60 @@ interface WeatherData {
     weatherCode: number;
     condition: string;
   }>;
+}
+
+// Popular cities for quick access
+const QUICK_CITIES = [
+  "Paris",
+  "Tokyo",
+  "New York",
+  "London",
+  "Sydney",
+  "Dubai",
+];
+
+// Current weather data (stored for actions like "Tell Claude")
+let currentWeatherData: WeatherData | null = null;
+
+// Log entries for the logging panel
+const logEntries: Array<{
+  level: "info" | "warn" | "error";
+  timestamp: string;
+  message: string;
+}> = [];
+
+/**
+ * Add a log entry to the UI panel
+ */
+function addLogEntry(
+  level: "info" | "warn" | "error",
+  timestamp: string,
+  message: string,
+): void {
+  logEntries.push({ level, timestamp, message });
+
+  // Keep only last 50 entries
+  if (logEntries.length > 50) {
+    logEntries.shift();
+  }
+
+  // Update UI
+  const loggingContent = document.getElementById("logging-content");
+  const logCount = document.getElementById("log-count");
+
+  if (loggingContent) {
+    const entry = document.createElement("div");
+    entry.className = `log-entry log-${level}`;
+    entry.innerHTML = `<span class="log-time">${timestamp}</span>${message}`;
+    loggingContent.appendChild(entry);
+
+    // Auto-scroll to bottom
+    loggingContent.scrollTop = loggingContent.scrollHeight;
+  }
+
+  if (logCount) {
+    logCount.textContent = `(${logEntries.length})`;
+  }
 }
 
 /**
@@ -67,12 +160,15 @@ function getDayName(dateString: string, index: number): string {
  * Render the weather dashboard
  */
 function renderWeather(data: WeatherData): void {
-  const container = document.getElementById("weather-container");
-  if (!container) return;
+  // Store current data for actions
+  currentWeatherData = data;
+
+  const weatherContent = document.getElementById("weather-content");
+  if (!weatherContent) return;
 
   const currentIcon = getWeatherIcon(data.current.weatherCode);
 
-  container.innerHTML = `
+  weatherContent.innerHTML = `
     <div class="location-header">
       <h1>${data.location}</h1>
       <p>${data.latitude.toFixed(2)}°, ${data.longitude.toFixed(2)}°</p>
@@ -128,23 +224,23 @@ function renderWeather(data: WeatherData): void {
     </div>
   `;
 
-  container.style.display = "block";
+  log.info(`Weather rendered for ${data.location}`);
 }
 
 /**
  * Show error message
  */
 function showError(message: string): void {
-  const container = document.getElementById("weather-container");
-  if (!container) return;
+  const weatherContent = document.getElementById("weather-content");
+  if (!weatherContent) return;
 
-  container.innerHTML = `
+  weatherContent.innerHTML = `
     <div class="error-message">
       <h2>⚠️ Error</h2>
       <p>${message}</p>
     </div>
   `;
-  container.style.display = "block";
+  log.error("Error displayed", message);
 }
 
 /**
@@ -157,6 +253,147 @@ function hideLoading(): void {
   }
 }
 
+/**
+ * Search for weather by location using callServerTool
+ */
+async function searchLocation(location: string): Promise<void> {
+  if (!location.trim()) {
+    showError("Please enter a location");
+    return;
+  }
+
+  const searchBtn = document.getElementById("search-btn");
+  if (searchBtn) {
+    searchBtn.setAttribute("disabled", "true");
+    searchBtn.innerHTML = '<span class="loading-spinner"></span> Searching...';
+  }
+
+  log.info(`Searching for location: ${location}`);
+
+  try {
+    // Call the show-weather tool with the location
+    const result = await appInstance.callServerTool({
+      name: "show-weather",
+      arguments: { location },
+    });
+
+    log.info("Weather tool result received", result);
+
+    // Extract weather data from result
+    const weatherData = result._meta?.weatherData as WeatherData | undefined;
+
+    if (weatherData) {
+      renderWeather(weatherData);
+      hideLoading();
+    } else {
+      showError("No weather data in response");
+    }
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    log.error("Failed to fetch weather", errorMsg);
+    showError(`Failed to fetch weather: ${errorMsg}`);
+  } finally {
+    if (searchBtn) {
+      searchBtn.removeAttribute("disabled");
+      searchBtn.innerHTML = "🔍 Search";
+    }
+  }
+}
+
+/**
+ * Send weather summary to chat using sendMessage
+ */
+async function tellClaude(): Promise<void> {
+  if (!currentWeatherData) {
+    log.warn("No weather data available to share");
+    return;
+  }
+
+  const data = currentWeatherData;
+  const message = `The weather in ${data.location} is currently ${Math.round(data.current.temperature)}°C and ${data.current.condition.toLowerCase()}. It feels like ${Math.round(data.current.feelsLike)}°C with ${data.current.humidity}% humidity.`;
+
+  log.info("Sending message to chat", message);
+
+  try {
+    await appInstance.sendMessage({
+      content: [{ type: "text", text: message }],
+      role: "user",
+    });
+    log.info("Message sent to chat successfully");
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    log.error("Failed to send message", errorMsg);
+  }
+}
+
+/**
+ * Open weather.com in browser using sendOpenLink
+ */
+async function openWeatherWebsite(): Promise<void> {
+  if (!currentWeatherData) {
+    log.warn("No weather data available for link");
+    return;
+  }
+
+  const { location, latitude, longitude } = currentWeatherData;
+
+  // Weather.com URL format
+  const url = `https://weather.com/weather/today/l/${latitude.toFixed(2)},${longitude.toFixed(2)}`;
+
+  log.info(`Opening Weather.com for ${location}`, url);
+
+  try {
+    await appInstance.sendOpenLink({ url });
+    log.info("Link opened successfully");
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    log.error("Failed to open link", errorMsg);
+  }
+}
+
+/**
+ * Initialize quick city buttons
+ */
+function initializeQuickCities(): void {
+  const container = document.getElementById("quick-cities");
+  if (!container) return;
+
+  container.innerHTML = QUICK_CITIES.map(
+    (city) => `<div class="city-chip" data-city="${city}">${city}</div>`,
+  ).join("");
+
+  // Add click handlers
+  container.querySelectorAll(".city-chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      const city = chip.getAttribute("data-city");
+      if (city) {
+        searchLocation(city);
+      }
+    });
+  });
+
+  log.info("Quick cities initialized", QUICK_CITIES);
+}
+
+/**
+ * Initialize logging panel toggle
+ */
+function initializeLoggingPanel(): void {
+  const header = document.getElementById("logging-header");
+  const content = document.getElementById("logging-content");
+  const toggle = document.getElementById("logging-toggle");
+
+  if (!header || !content || !toggle) return;
+
+  let isCollapsed = false;
+
+  header.addEventListener("click", () => {
+    isCollapsed = !isCollapsed;
+    content.classList.toggle("collapsed", isCollapsed);
+    toggle.textContent = isCollapsed ? "▶" : "▼";
+  });
+}
+
 // Create App instance
 const app = new App(
   { name: "Weather Dashboard", version: "1.0.0" },
@@ -164,13 +401,18 @@ const app = new App(
   { autoResize: false },
 );
 
+// Make app instance available to log functions
+appInstance = app;
+
 // Register handlers
 app.onteardown = async () => {
-  log.info("App is being torn down");
+  await log.info("App is being torn down");
   return {};
 };
 
-app.onerror = log.error;
+app.onerror = (error: Error) => {
+  log.error("App error occurred", error.message);
+};
 
 // Handle tool input (initial call)
 app.ontoolinput = async (params) => {
@@ -179,7 +421,7 @@ app.ontoolinput = async (params) => {
 
 // Handle tool result (weather data from show-weather tool)
 app.ontoolresult = async (result) => {
-  log.info("Received tool result:", result);
+  await log.info("Received tool result from server");
 
   const weatherData = result._meta?.weatherData as WeatherData | undefined;
 
@@ -187,11 +429,17 @@ app.ontoolresult = async (result) => {
     try {
       renderWeather(weatherData);
       hideLoading();
+      await log.info("Initial weather data rendered", weatherData.location);
     } catch (error) {
-      log.error("Failed to render weather:", error);
+      await log.error(
+        "Failed to render weather",
+        error instanceof Error ? error.message : String(error),
+      );
       showError("Failed to display weather data");
       hideLoading();
     }
+  } else {
+    await log.warn("Tool result received but no weather data found");
   }
 };
 
@@ -199,22 +447,73 @@ app.ontoolresult = async (result) => {
 async function initialize() {
   try {
     await app.connect();
-    log.info("Connected to host");
+    await log.info("Connected to host");
+
+    // Show the weather container immediately
+    const container = document.getElementById("weather-container");
+    if (container) {
+      container.style.display = "block";
+    }
 
     // Tell host our preferred size for inline mode
     app.sendSizeChanged({ height: PREFERRED_INLINE_HEIGHT });
-    log.info("Sent initial size:", PREFERRED_INLINE_HEIGHT);
+    await log.info("Sent initial size", PREFERRED_INLINE_HEIGHT);
+
+    // Initialize interactive features
+    initializeQuickCities();
+    initializeLoggingPanel();
+
+    // Set up search functionality
+    const searchInput = document.getElementById(
+      "location-search",
+    ) as HTMLInputElement;
+    const searchBtn = document.getElementById("search-btn");
+
+    if (searchInput && searchBtn) {
+      // Search on button click
+      searchBtn.addEventListener("click", () => {
+        searchLocation(searchInput.value);
+      });
+
+      // Search on Enter key
+      searchInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+          searchLocation(searchInput.value);
+        }
+      });
+
+      await log.info("Search handlers registered");
+    }
+
+    // Set up action buttons
+    const tellClaudeBtn = document.getElementById("tell-claude-btn");
+    const openWebBtn = document.getElementById("open-web-btn");
+
+    if (tellClaudeBtn) {
+      tellClaudeBtn.addEventListener("click", tellClaude);
+      await log.info("Tell Claude button registered");
+    }
+
+    if (openWebBtn) {
+      openWebBtn.addEventListener("click", openWeatherWebsite);
+      await log.info("Open Web button registered");
+    }
 
     // Wait a bit for tool input
-    setTimeout(() => {
+    setTimeout(async () => {
       const loadingEl = document.getElementById("loading");
       if (loadingEl && loadingEl.style.display !== "none") {
-        showError("No weather data received. Please call the show-weather tool.");
+        await log.info(
+          "No initial weather data, ready for search",
+        );
         hideLoading();
       }
-    }, 3000);
+    }, 2000);
   } catch (error) {
-    log.error("Failed to initialize:", error);
+    await log.error(
+      "Failed to initialize",
+      error instanceof Error ? error.message : String(error),
+    );
     showError(
       `Initialization error: ${error instanceof Error ? error.message : String(error)}`,
     );
