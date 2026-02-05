@@ -40,7 +40,7 @@ CesiumJS-based globe with OpenStreetMap tiles for geographic visualization.
 | **Chat Integration** | `sendMessage()` | "Tell Claude" button | ✅ Complete |
 | **External Links** | `sendOpenLink()` | "Open Weather.com" button | ✅ Complete |
 | **Structured Logging** | `sendLog()` | Activity log panel (3 levels) | ✅ Complete |
-| **Size Hints** | `sendSizeChanged()` | 1200px viewport height | ✅ Complete |
+| **Size Hints** | `sendSizeChanged()` | Dynamic viewport height | ✅ Complete |
 | **Tool Results** | `ontoolresult` | Initial weather data handler | ✅ Complete |
 | **Tool Input** | `ontoolinput` | Parameter handling | ✅ Complete |
 | **Error Handling** | `onerror` | App-level error handler | ✅ Complete |
@@ -48,27 +48,27 @@ CesiumJS-based globe with OpenStreetMap tiles for geographic visualization.
 | **UI Resources** | `registerAppResource()` | 2 UI resources (weather + map) | ✅ Complete |
 | **CSP Configuration** | `_meta.ui.csp` | External domain whitelisting | ✅ Complete |
 | **Tool Metadata** | `_meta` | Weather data + viewUUID | ✅ Complete |
+| **Display Modes** | `requestDisplayMode()` | Fullscreen/inline with toggle button | ✅ Complete |
+| **Host Context** | `onhostcontextchanged` | Display mode and theme detection | ✅ Complete |
+| **Keyboard Shortcuts** | Event handlers | Esc (exit fullscreen), Ctrl+Enter (toggle) | ✅ Complete |
+| **Theme Detection** | `onhostcontextchanged` | Light/dark theme adaptation | ✅ Complete |
+| **State Persistence** | localStorage | Favorites, history, bookmarks with notes | ✅ Complete |
+| **Progressive Streaming** | Custom tool | 5-phase streaming analysis | ✅ Complete |
+| **Model Context Updates** | `updateModelContext()` | Weather summary sent to Claude | ✅ Complete |
+| **Bookmarks with Notes** | localStorage + UI | Save locations with custom notes | ✅ Complete |
 
 ### **Partially Implemented** 🚧
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **Display Modes** | 🟢 Complete | Both apps support fullscreen/inline with `requestDisplayMode()` |
-| **Host Context** | 🟢 Complete | Both apps read display mode and theme via `onhostcontextchanged` |
-| **Keyboard Shortcuts** | 🟢 Complete | Both apps: Esc (exit fullscreen), Ctrl+Enter (toggle) |
-| **Theme Detection** | 🟢 Complete | Both apps detect and apply light/dark themes |
-| **State Persistence** | 🟢 Complete | Weather: favorites + search history, Map: camera position |
-| **Progressive Streaming** | 🟢 Complete | Weather app: 5-phase streaming analysis tool |
-| **Model Context Updates** | 🟢 Complete | Both apps send context updates (map: screenshots, weather: text summary) |
+| **PiP Display Mode** | 🟡 Partial | CSS ready, awaiting host support |
 
 ### **Not Yet Implemented** ❌
 
 | Feature | Priority | Effort | Notes |
 |---------|----------|--------|-------|
-| **PiP Display Mode** | Medium | Low | CSS ready, need host support testing |
 | **Tool List Changes** | Medium | Low | `tools/listChanged` notifications |
-| **Advanced Persistence** | Medium | Medium | Favorites, history, bookmarks |
-| **Real-time Updates** | Medium | Medium | Auto-refresh, live data |
+| **Real-time Updates** | Medium | Medium | Auto-refresh, live weather data |
 | **Comparison Mode** | Low | High | Multiple locations side-by-side |
 | **Advanced Forms** | Low | Medium | Multi-step forms, validation |
 | **Accessibility** | Low | Medium | Full ARIA, screen reader support |
@@ -92,6 +92,8 @@ The Weather Dashboard is the primary testing application demonstrating core MCP 
 - ⌨️ **Keyboard Shortcuts** - Ctrl+Enter (toggle fullscreen), Escape (exit)
 - 🌊 **Progressive Streaming Analysis** - Live 5-phase weather analysis with real-time updates
 - ⭐ **Favorites & History** - Save favorite locations and search history (localStorage)
+- 🧠 **Model Context Updates** - Sends weather data to Claude's context via `updateModelContext()`
+- 📌 **Bookmarks with Notes** - Save locations with custom notes, timestamps, and full edit/delete support
 
 ### **Weather Data**
 - Current conditions with temperature, humidity, wind speed, UV index
