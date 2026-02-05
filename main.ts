@@ -25,6 +25,20 @@ export async function startStreamableHTTPServer(
   const app = createMcpExpressApp({ host: "0.0.0.0" });
   app.use(cors());
 
+  // Health check endpoint for Azure
+  app.get("/", (req: Request, res: Response) => {
+    res.status(200).json({
+      status: "healthy",
+      service: "MCP Map Server",
+      port: port,
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  app.get("/health", (req: Request, res: Response) => {
+    res.status(200).json({ status: "ok" });
+  });
+
   app.all("/mcp", async (req: Request, res: Response) => {
     const server = createServer();
     const transport = new StreamableHTTPServerTransport({
@@ -51,8 +65,13 @@ export async function startStreamableHTTPServer(
     }
   });
 
-  const httpServer = app.listen(port, () => {
-    console.log(`MCP server listening on http://localhost:${port}/mcp`);
+  const httpServer = app.listen(port, "0.0.0.0", () => {
+    console.log(`=== MCP Server Started ===`);
+    console.log(`Port: ${port}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
+    console.log(`Health: http://localhost:${port}/health`);
+    console.log(`MCP Endpoint: http://localhost:${port}/mcp`);
+    console.log(`========================`);
   });
 
   const shutdown = () => {
@@ -76,14 +95,23 @@ export async function startStdioServer(
 }
 
 async function main() {
+  console.log("Starting MCP Map Server...");
+  console.log("Node version:", process.version);
+  console.log("PORT env:", process.env.PORT || "not set (using 3001)");
+  console.log("Args:", process.argv);
+
   if (process.argv.includes("--stdio")) {
+    console.log("Starting in STDIO mode");
     await startStdioServer(createServer);
   } else {
+    console.log("Starting in HTTP mode");
     await startStreamableHTTPServer(createServer);
   }
 }
 
 main().catch((e) => {
+  console.error("=== STARTUP ERROR ===");
   console.error(e);
+  console.error("====================");
   process.exit(1);
 });
