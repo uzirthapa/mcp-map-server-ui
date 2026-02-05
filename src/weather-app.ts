@@ -618,6 +618,234 @@ async function openWeatherWebsite(): Promise<void> {
 }
 
 /**
+ * Call progressive streaming weather analysis API
+ */
+async function getWeatherStream(): Promise<void> {
+  if (!currentWeatherData) {
+    log.warn("No weather data available for streaming analysis");
+    return;
+  }
+
+  const { location, latitude, longitude } = currentWeatherData;
+  log.info("Starting progressive weather stream", {
+    location,
+    latitude,
+    longitude,
+  });
+
+  try {
+    // Call the streaming tool
+    const response = await appInstance.callServerTool({
+      name: "uzir-weather-stream",
+      arguments: {
+        location,
+        latitude,
+        longitude,
+      },
+    });
+
+    log.info("Received streaming response metadata", response);
+
+    // Extract stream metadata
+    const streamId = (response as any)._meta?.streamId;
+    const updates = (response as any)._meta?.updates;
+    const totalPhases = (response as any)._meta?.totalPhases;
+
+    if (!updates || !Array.isArray(updates)) {
+      throw new Error("No stream updates in response");
+    }
+
+    // Display progressive insights
+    displayProgressiveInsights(streamId, updates, totalPhases);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    log.error("Failed to start weather stream", errorMsg);
+    alert(`Failed to start weather stream: ${errorMsg}`);
+  }
+}
+
+/**
+ * Display progressive insights as they arrive over time
+ */
+function displayProgressiveInsights(
+  streamId: string,
+  updates: any[],
+  totalPhases: number,
+): void {
+  // Create modal
+  const modal = document.createElement("div");
+  modal.className = "insights-modal stream-modal";
+  modal.innerHTML = `
+    <div class="insights-content">
+      <div class="insights-header" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+        <h2>🌊 Progressive Weather Analysis</h2>
+        <button class="close-insights">×</button>
+      </div>
+      <div class="insights-body">
+        <div class="stream-info">
+          <p><strong>Stream ID:</strong> <code>${streamId}</code></p>
+          <p><strong>Total Phases:</strong> ${totalPhases}</p>
+        </div>
+        <div class="stream-progress">
+          <div class="progress-bar">
+            <div id="progress-fill" class="progress-fill" style="width: 0%"></div>
+          </div>
+          <p id="progress-text">Initializing stream...</p>
+        </div>
+        <div id="stream-phases" class="stream-phases">
+          <!-- Phases will be added here progressively -->
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  // Add close handler
+  const closeBtn = modal.querySelector(".close-insights");
+  closeBtn?.addEventListener("click", () => {
+    modal.remove();
+  });
+
+  // Close on backdrop click
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) {
+      modal.remove();
+    }
+  });
+
+  log.info("Stream modal displayed, starting progressive updates");
+
+  // Simulate progressive updates arriving over time
+  const phasesContainer = document.getElementById("stream-phases");
+  const progressFill = document.getElementById("progress-fill");
+  const progressText = document.getElementById("progress-text");
+
+  if (!phasesContainer || !progressFill || !progressText) return;
+
+  updates.forEach((update, index) => {
+    setTimeout(() => {
+      // Add phase content
+      const phaseElement = document.createElement("div");
+      phaseElement.className = "stream-phase";
+      phaseElement.style.animation = "slideUp 0.4s ease-out";
+
+      const phaseContent = renderPhaseContent(update);
+      phaseElement.innerHTML = phaseContent;
+
+      phasesContainer.appendChild(phaseElement);
+
+      // Update progress
+      const progress = ((index + 1) / totalPhases) * 100;
+      progressFill.style.width = `${progress}%`;
+      progressText.textContent = `Phase ${index + 1} of ${totalPhases}: ${update.title}`;
+
+      log.info(`Stream phase ${update.phase} received`, update.title);
+
+      // Final phase
+      if (index === totalPhases - 1) {
+        progressText.textContent = "Analysis complete! ✓";
+        progressText.style.color = "#10b981";
+        progressText.style.fontWeight = "700";
+      }
+    }, update.delay);
+  });
+}
+
+/**
+ * Render content for a stream phase
+ */
+function renderPhaseContent(update: any): string {
+  const { phase, title, data } = update;
+
+  let content = `
+    <div class="phase-header">
+      <h3><span class="phase-badge">Phase ${phase}</span> ${title}</h3>
+      <span class="phase-timestamp">${new Date().toLocaleTimeString()}</span>
+    </div>
+    <div class="phase-body">
+  `;
+
+  // Phase 1: Current Conditions
+  if (data.temperature !== undefined) {
+    content += `
+      <div class="data-grid">
+        <div><strong>Temperature:</strong> ${data.temperature.toFixed(1)}°C</div>
+        <div><strong>Humidity:</strong> ${data.humidity.toFixed(1)}%</div>
+        <div><strong>Wind Speed:</strong> ${data.windSpeed.toFixed(1)} km/h</div>
+        <div><strong>Pressure:</strong> ${data.pressure.toFixed(1)} hPa</div>
+      </div>
+    `;
+  }
+
+  // Phase 2: Pattern Analysis
+  if (data.temperatureTrend) {
+    content += `<h4>Temperature Trend:</h4>`;
+    content += `<div class="data-grid">`;
+    content += `<div><strong>Direction:</strong> ${data.temperatureTrend.direction}</div>`;
+    content += `<div><strong>Rate:</strong> ${data.temperatureTrend.rate.toFixed(2)}°C/hr</div>`;
+    content += `<div><strong>Confidence:</strong> ${(data.temperatureTrend.confidence * 100).toFixed(0)}%</div>`;
+    content += `</div>`;
+  }
+  if (data.precipitationRisk) {
+    content += `<h4>Precipitation Risk:</h4>`;
+    content += `<div class="data-grid">`;
+    content += `<div><strong>Next 24 hours:</strong> ${data.precipitationRisk.next24h.toFixed(0)}%</div>`;
+    content += `<div><strong>Next 72 hours:</strong> ${data.precipitationRisk.next72h.toFixed(0)}%</div>`;
+    content += `</div>`;
+  }
+
+  // Phase 3: Historical Comparison
+  if (data.temperatureDeviation !== undefined) {
+    content += `
+      <p><strong>Temperature Deviation:</strong> ${data.temperatureDeviation > 0 ? "+" : ""}${data.temperatureDeviation.toFixed(1)}°C from average</p>
+      <p><strong>Humidity Deviation:</strong> ${data.humidityDeviation > 0 ? "+" : ""}${data.humidityDeviation.toFixed(1)}% from average</p>
+    `;
+    if (data.unusualFactors && data.unusualFactors.length > 0) {
+      content += `<h4>Unusual Factors:</h4><ul>`;
+      data.unusualFactors.forEach((factor: string) => {
+        content += `<li>${factor}</li>`;
+      });
+      content += `</ul>`;
+    }
+  }
+
+  // Phase 4: Forecast Predictions
+  if (data.shortTerm) {
+    content += `<h4>Short-term Forecast:</h4>`;
+    content += `<div class="data-grid">`;
+    content += `<div><strong>Next ${data.shortTerm.nextHours} hours:</strong> ${data.shortTerm.expectedChange}</div>`;
+    content += `<div><strong>Confidence:</strong> ${(data.shortTerm.confidence * 100).toFixed(0)}%</div>`;
+    content += `</div>`;
+  }
+  if (data.mediumTerm) {
+    content += `<h4>Medium-term Forecast:</h4>`;
+    content += `<p><strong>Next ${data.mediumTerm.nextDays} days:</strong> ${data.mediumTerm.expectedPattern}</p>`;
+  }
+
+  // Phase 5: Recommendations
+  if (data.clothing) {
+    content += `<h4>Recommendations:</h4>`;
+    content += `<p><strong>Clothing:</strong> ${data.clothing}</p>`;
+  }
+  if (data.activities) {
+    content += `<p><strong>Activities:</strong> ${data.activities}</p>`;
+  }
+  if (data.alerts && data.alerts.length > 0) {
+    content += `<h4>Alerts:</h4><ul>`;
+    data.alerts.forEach((alert: string) => {
+      content += `<li>${alert}</li>`;
+    });
+    content += `</ul>`;
+  }
+
+  content += `</div>`;
+
+  return content;
+}
+
+
+/**
  * Initialize quick city buttons
  */
 function initializeQuickCities(): void {
@@ -832,6 +1060,12 @@ async function initialize() {
     if (openWebBtn) {
       openWebBtn.addEventListener("click", openWeatherWebsite);
       await log.info("Open Web button registered");
+    }
+
+    const streamBtn = document.getElementById("stream-btn");
+    if (streamBtn) {
+      streamBtn.addEventListener("click", getWeatherStream);
+      await log.info("Stream button registered");
     }
 
     // Set up fullscreen button

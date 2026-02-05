@@ -535,5 +535,148 @@ export function createServer(): McpServer {
     },
   );
 
+  // Custom tool: uzir-weather-stream
+  // Triggers progressive streaming that returns multiple values over time
+  registerAppTool(
+    server,
+    "uzir-weather-stream",
+    {
+      title: "Stream Weather Analysis",
+      description:
+        "Start a progressive weather analysis stream that returns data over time. App-only tool.",
+      inputSchema: {
+        location: z.string().optional().describe("Location name"),
+        latitude: z.number().optional().describe("Latitude"),
+        longitude: z.number().optional().describe("Longitude"),
+      },
+      _meta: {
+        [RESOURCE_URI_META_KEY]: WEATHER_RESOURCE_URI,
+        ui: {
+          visibility: ["app"], // App-only tool
+        },
+      },
+    },
+    async ({ location, latitude, longitude }): Promise<CallToolResult> => {
+      if (!location && (!latitude || !longitude)) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Error: Either location or coordinates required",
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const streamId = randomUUID();
+      const loc = location || `${latitude},${longitude}`;
+
+      // Start background streaming process
+      // In production, this could trigger real API polling, database queries, etc.
+      const updates = [
+        {
+          phase: 1,
+          delay: 1000,
+          title: "Current Conditions",
+          data: {
+            temperature: 15 + Math.random() * 15,
+            humidity: 40 + Math.random() * 40,
+            windSpeed: Math.random() * 20,
+            pressure: 990 + Math.random() * 40,
+          },
+        },
+        {
+          phase: 2,
+          delay: 2000,
+          title: "Pattern Analysis",
+          data: {
+            temperatureTrend: {
+              direction: Math.random() > 0.5 ? "increasing" : "decreasing",
+              rate: Math.random() * 2,
+              confidence: 0.7 + Math.random() * 0.2,
+            },
+            precipitationRisk: {
+              next24h: Math.random() * 100,
+              next72h: Math.random() * 100,
+            },
+          },
+        },
+        {
+          phase: 3,
+          delay: 3000,
+          title: "Historical Comparison",
+          data: {
+            temperatureDeviation: -5 + Math.random() * 10,
+            humidityDeviation: -10 + Math.random() * 20,
+            unusualFactors: [
+              ...(Math.random() > 0.5 ? ["Higher than average temperature"] : []),
+              ...(Math.random() > 0.6 ? ["Unusual wind patterns"] : []),
+            ],
+          },
+        },
+        {
+          phase: 4,
+          delay: 4000,
+          title: "Forecast Predictions",
+          data: {
+            shortTerm: {
+              nextHours: 6,
+              expectedChange: Math.random() > 0.5 ? "improving" : "deteriorating",
+              confidence: 0.8 + Math.random() * 0.15,
+            },
+            mediumTerm: {
+              nextDays: 3,
+              expectedPattern: ["stable", "variable", "stormy"][
+                Math.floor(Math.random() * 3)
+              ],
+            },
+          },
+        },
+        {
+          phase: 5,
+          delay: 5000,
+          title: "Recommendations",
+          data: {
+            clothing: [
+              "Light jacket recommended",
+              "Sunglasses suggested",
+              "Umbrella not needed",
+            ][Math.floor(Math.random() * 3)],
+            activities: [
+              "Good for outdoor activities",
+              "Indoor day recommended",
+              "Perfect for hiking",
+            ][Math.floor(Math.random() * 3)],
+            alerts: Math.random() > 0.7 ? ["Weather change expected in 6-12 hours"] : [],
+          },
+        },
+      ];
+
+      // Note: In the current MCP SDK, there's no direct way to send notifications
+      // from within a tool handler. This would require the server instance to have
+      // a sendNotification method or access to the transport.
+      // For now, we'll return immediate response with metadata about the stream
+      // and simulate progressive updates in the UI.
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Started weather analysis stream for ${loc}`,
+          },
+        ],
+        _meta: {
+          streamId,
+          location: loc,
+          totalPhases: 5,
+          estimatedDuration: 5000,
+          // Include all updates so the app can simulate progressive display
+          updates,
+        },
+      };
+    }
+  );
+
   return server;
 }
