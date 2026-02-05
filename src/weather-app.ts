@@ -61,6 +61,9 @@ const HEIGHT_LOG_EXPANDED = 349;      // Activity log header + content (measured
 let isForecastVisible = false;
 let isLogExpanded = false;
 
+// Track display mode
+let currentDisplayMode: "inline" | "fullscreen" | "pip" = "inline";
+
 /**
  * Calculate and update viewport height based on visible components
  */
@@ -73,6 +76,61 @@ function updateViewportHeight(): void {
   appInstance.sendSizeChanged({ height: totalHeight });
 
   console.log(`[WEATHER-APP] Viewport height updated to ${totalHeight}px (base: ${HEIGHT_BASE}, forecast: ${forecastHeight}, log: ${logHeight})`);
+}
+
+/**
+ * Update fullscreen button icons based on current display mode
+ */
+function updateFullscreenButton(): void {
+  const fullscreenBtn = document.getElementById("fullscreen-btn");
+  const expandIcon = document.getElementById("expand-icon");
+  const compressIcon = document.getElementById("compress-icon");
+
+  if (!fullscreenBtn || !expandIcon || !compressIcon) return;
+
+  if (currentDisplayMode === "fullscreen") {
+    expandIcon.style.display = "none";
+    compressIcon.style.display = "block";
+    fullscreenBtn.title = "Exit fullscreen";
+  } else {
+    expandIcon.style.display = "block";
+    compressIcon.style.display = "none";
+    fullscreenBtn.title = "Toggle fullscreen";
+  }
+}
+
+/**
+ * Toggle fullscreen mode
+ */
+async function toggleFullscreen(): Promise<void> {
+  const newMode = currentDisplayMode === "fullscreen" ? "inline" : "fullscreen";
+
+  await log.info(`Requesting display mode: ${newMode}`);
+
+  try {
+    await appInstance.requestDisplayMode({ mode: newMode });
+    // The actual mode change will be handled by onhostcontextchanged
+  } catch (error) {
+    await log.error("Failed to change display mode", error instanceof Error ? error.message : String(error));
+  }
+}
+
+/**
+ * Apply theme to document
+ */
+function applyTheme(theme: "light" | "dark"): void {
+  document.body.classList.remove("theme-light", "theme-dark");
+  document.body.classList.add(`theme-${theme}`);
+  console.log(`[WEATHER-APP] Applied theme: ${theme}`);
+}
+
+/**
+ * Apply display mode classes to document
+ */
+function applyDisplayMode(mode: "inline" | "fullscreen" | "pip"): void {
+  document.body.classList.remove("mode-inline", "mode-fullscreen", "mode-pip");
+  document.body.classList.add(`mode-${mode}`);
+  console.log(`[WEATHER-APP] Applied display mode: ${mode}`);
 }
 
 interface WeatherData {
@@ -515,6 +573,26 @@ app.ontoolresult = async (result) => {
   }
 };
 
+// Handle host context changes (theme, display mode)
+app.onhostcontextchanged = async (context) => {
+  await log.info("Host context changed", {
+    theme: context.theme,
+    displayMode: context.displayMode,
+  });
+
+  // Apply theme if available
+  if (context.theme) {
+    applyTheme(context.theme);
+  }
+
+  // Apply display mode if available
+  if (context.displayMode) {
+    currentDisplayMode = context.displayMode;
+    applyDisplayMode(context.displayMode);
+    updateFullscreenButton();
+  }
+};
+
 // Initialize and connect to host
 async function initialize() {
   try {
@@ -570,6 +648,44 @@ async function initialize() {
       openWebBtn.addEventListener("click", openWeatherWebsite);
       await log.info("Open Web button registered");
     }
+
+    // Set up fullscreen button
+    const fullscreenBtn = document.getElementById("fullscreen-btn");
+    if (fullscreenBtn) {
+      fullscreenBtn.style.display = "flex";
+      fullscreenBtn.addEventListener("click", toggleFullscreen);
+      await log.info("Fullscreen button registered");
+    }
+
+    // Initialize theme and display mode from host context
+    const hostContext = app.getHostContext();
+    if (hostContext) {
+      if (hostContext.theme) {
+        applyTheme(hostContext.theme);
+        await log.info(`Initial theme applied: ${hostContext.theme}`);
+      }
+      if (hostContext.displayMode) {
+        currentDisplayMode = hostContext.displayMode;
+        applyDisplayMode(hostContext.displayMode);
+        updateFullscreenButton();
+        await log.info(`Initial display mode applied: ${hostContext.displayMode}`);
+      }
+    }
+
+    // Set up keyboard shortcuts
+    document.addEventListener("keydown", async (e) => {
+      // Escape: Exit fullscreen
+      if (e.key === "Escape" && currentDisplayMode === "fullscreen") {
+        e.preventDefault();
+        await toggleFullscreen();
+      }
+      // Ctrl+Enter or Cmd+Enter: Toggle fullscreen
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        await toggleFullscreen();
+      }
+    });
+    await log.info("Keyboard shortcuts registered (Escape, Ctrl+Enter)");
 
     // Wait a bit for tool input
     setTimeout(async () => {

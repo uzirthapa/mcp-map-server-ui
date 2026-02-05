@@ -39,9 +39,10 @@ CesiumJS-based globe with OpenStreetMap tiles for geographic visualization.
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **Display Modes** | 🟡 Partial | Map has fullscreen/inline, weather only inline |
-| **Host Context** | 🟡 Partial | Map reads display mode, no theme detection |
-| **Keyboard Shortcuts** | 🟡 Partial | Map has Esc/Ctrl+Enter, weather has Enter |
+| **Display Modes** | 🟢 Complete | Both apps support fullscreen/inline with `requestDisplayMode()` |
+| **Host Context** | 🟢 Complete | Both apps read display mode and theme via `onhostcontextchanged` |
+| **Keyboard Shortcuts** | 🟢 Complete | Both apps: Esc (exit fullscreen), Ctrl+Enter (toggle) |
+| **Theme Detection** | 🟢 Complete | Both apps detect and apply light/dark themes |
 | **State Persistence** | 🟡 Partial | Map uses localStorage, weather doesn't |
 | **Model Context Updates** | 🟡 Partial | Map sends screenshots, weather doesn't |
 
@@ -49,8 +50,7 @@ CesiumJS-based globe with OpenStreetMap tiles for geographic visualization.
 
 | Feature | Priority | Effort | Notes |
 |---------|----------|--------|-------|
-| **PiP Display Mode** | High | Medium | Picture-in-picture support |
-| **Theme Detection** | High | Low | Respond to light/dark mode |
+| **PiP Display Mode** | Medium | Low | CSS ready, need host support testing |
 | **Tool List Changes** | Medium | Low | `tools/listChanged` notifications |
 | **Advanced Persistence** | Medium | Medium | Favorites, history, bookmarks |
 | **Real-time Updates** | Medium | Medium | Auto-refresh, live data |
@@ -72,18 +72,22 @@ The Weather Dashboard is the primary testing application demonstrating core MCP 
 - 💬 **Tell Claude** - Send weather summaries to chat via `sendMessage()`
 - 🌐 **Open Weather.com** - External browser links via `sendOpenLink()`
 - 📝 **Activity Log** - Real-time structured logging with `sendLog()`
+- ⛶ **Fullscreen Mode** - Toggle display modes with `requestDisplayMode()`
+- 🎨 **Theme Detection** - Responds to light/dark mode changes
+- ⌨️ **Keyboard Shortcuts** - Ctrl+Enter (toggle fullscreen), Escape (exit)
 
 ### **Weather Data**
 - Current conditions with temperature, humidity, wind speed, UV index
-- 7-day forecast with high/low temperatures
+- 7-day forecast with high/low temperatures (collapsible)
 - Weather condition icons
 - Geo-coordinates display
 
 ### **Technical Details**
 - Uses Open-Meteo API (no API key required)
 - OpenStreetMap Nominatim for geocoding
-- 1200px viewport height (no scrolling needed)
+- Dynamic viewport height (969-1580px based on visible components)
 - Responsive design
+- Theme adaptation (light/dark backgrounds)
 - Error handling and recovery
 
 ---
@@ -471,10 +475,75 @@ _meta: {
 
 ---
 
+### 14. **`requestDisplayMode()` - Fullscreen Toggle**
+
+**How It's Tested:** Fullscreen button switches display modes
+
+**Prompt:**
+1. Load weather dashboard for any location
+2. Click the fullscreen button (⛶) in the top-right corner
+3. Or press **Ctrl+Enter** (or Cmd+Enter on Mac)
+
+**What to Observe:**
+- ✅ Weather dashboard expands to fullscreen
+- ✅ Fullscreen button icon changes to compress icon (⛶ → ⛉)
+- ✅ Button tooltip updates: "Exit fullscreen"
+- ✅ Activity log shows: "Requesting display mode: fullscreen"
+- ✅ Press **Escape** or click button again to exit fullscreen
+- ✅ Activity log shows: "Requesting display mode: inline"
+
+**Behind the Scenes:**
+The UI calls `app.requestDisplayMode({ mode: "fullscreen" })` which asks the host to change the display mode. The host responds via `onhostcontextchanged`.
+
+---
+
+### 15. **`onhostcontextchanged` - Display Mode & Theme**
+
+**How It's Tested:** App responds to host context changes
+
+**Prompt:**
+1. Load weather dashboard
+2. Change your system theme (light ↔ dark) or display mode
+
+**What to Observe:**
+- ✅ Activity log shows: "Host context changed { theme: 'light'|'dark', displayMode: '...' }"
+- ✅ Background gradient adapts:
+  - **Light theme**: Purple gradient (#667eea → #764ba2)
+  - **Dark theme**: Dark blue gradient (#2c3e50 → #34495e)
+- ✅ Display mode CSS classes applied to body
+- ✅ UI responds immediately without reload
+
+**Behind the Scenes:**
+The `onhostcontextchanged` handler receives context updates from the host and applies theme/mode classes to `document.body`.
+
+---
+
+### 16. **Keyboard Shortcuts - Display Mode Control**
+
+**How It's Tested:** Keyboard commands for fullscreen
+
+**Actions:**
+1. Load weather dashboard
+2. Press **Ctrl+Enter** (or **Cmd+Enter** on Mac)
+3. Press **Escape** when in fullscreen
+
+**What to Observe:**
+- ✅ **Ctrl+Enter**: Toggles fullscreen on/off
+- ✅ **Escape**: Exits fullscreen (only works when in fullscreen)
+- ✅ Activity log shows mode change requests
+- ✅ Fullscreen button state syncs with keyboard actions
+- ✅ Search input shortcuts still work (Enter to search)
+
+**Behind the Scenes:**
+Global `keydown` event listener detects shortcuts and calls `toggleFullscreen()` which uses `requestDisplayMode()`.
+
+---
+
 ## 🎯 Testing Checklist
 
 Use this checklist to verify all MCP Apps features:
 
+**Core APIs (Phase 1):**
 - [ ] **ontoolresult** - Weather loads on initial call
 - [ ] **callServerTool** - Search box updates weather
 - [ ] **callServerTool** - Quick city buttons work
@@ -488,6 +557,13 @@ Use this checklist to verify all MCP Apps features:
 - [ ] **UI Resources** - Complete dashboard loads
 - [ ] **Tool Metadata** - All weather data displays
 - [ ] **CSP Config** - External APIs work without errors
+
+**Display & Themes (Phase 2):**
+- [ ] **requestDisplayMode** - Fullscreen button toggles mode
+- [ ] **onhostcontextchanged** - Theme and display mode changes applied
+- [ ] **Keyboard Shortcuts** - Ctrl+Enter toggles, Escape exits fullscreen
+- [ ] **Theme Detection** - Light/dark theme switching works
+- [ ] **Fullscreen Button** - Icon updates, tooltip changes
 
 **All features passing?** ✅ MCP Apps APIs fully tested!
 
@@ -680,12 +756,14 @@ Ensure your deployment exposes the `/mcp` endpoint and supports:
 - [x] Structured logging
 - [x] Error handling
 
-### Phase 2: Display & Themes (In Progress)
+### Phase 2: Display & Themes (✅ Complete)
 - [x] Inline display mode
-- [x] Fullscreen mode (map only)
-- [ ] PiP mode
-- [ ] Theme detection (light/dark)
-- [ ] Responsive layouts per mode
+- [x] Fullscreen mode (both apps)
+- [x] Theme detection (light/dark)
+- [x] Keyboard shortcuts (Esc, Ctrl+Enter)
+- [x] Host context change handling
+- [x] Responsive layouts per mode
+- [x] PiP mode CSS (ready for host support)
 
 ### Phase 3: Persistence & State (Next)
 - [ ] Favorites management
