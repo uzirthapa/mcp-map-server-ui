@@ -18,7 +18,11 @@
     "start:stdio": "npm run serve:stdio",
     "dev": "cross-env NODE_ENV=development concurrently \"npm run watch\" \"npm run serve:http\"",
     "prepublishOnly": "npm run build",
-    "serve": "node --watch dist/index.js"
+    "serve": "node --watch dist/index.js",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:a11y": "playwright test tests/accessibility.spec.ts",
+    "test:headed": "playwright test --headed"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "^1.0.0",
@@ -35,6 +39,10 @@
     "vite": "^6.0.0",
     "vite-plugin-singlefile": "^2.3.0",
     "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "@axe-core/playwright": "^4.8.0"
   },
   "types": "dist/server.d.ts",
   "exports": {

@@ -11,6 +11,35 @@
             padding: 0;
         }
 
+        /* Phase 5: Accessibility - Screen reader only */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+
+        /* Phase 5: Accessibility - Focus visible styles */
+        *:focus-visible {
+            outline: 3px solid #667eea;
+            outline-offset: 2px;
+            border-radius: 4px;
+        }
+
+        button:focus-visible {
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
+        }
+
+        input:focus-visible {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
+        }
+
         html, body {
             width: 100%;
             height: 100%;
@@ -332,6 +361,26 @@
         .btn-secondary:hover:not(:disabled) {
             background: #667eea;
             color: white;
+        }
+
+        #history-dropdown-btn {
+            min-width: 48px;
+            padding: 10px 12px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        #history-dropdown-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        #history-dropdown-btn[aria-expanded="true"] #history-arrow {
+            transform: rotate(180deg);
+        }
+
+        #history-arrow {
+            display: inline-block;
+            transition: transform 0.3s ease;
         }
 
         .quick-cities {
@@ -1087,6 +1136,161 @@
                 grid-template-columns: repeat(2, 1fr);
             }
         }
+
+        /* Phase 4: Keyboard Shortcuts - Search History Dropdown */
+        .search-container {
+            position: relative;
+        }
+
+        .search-history-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            margin-top: 4px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            max-height: 400px;
+            overflow: hidden;
+            animation: slideDown 0.2s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .dropdown-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid #e5e7eb;
+            background: #f9fafb;
+        }
+
+        .dropdown-header h3 {
+            margin: 0;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .close-dropdown {
+            background: transparent;
+            border: none;
+            color: #999;
+            font-size: 1.3rem;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+
+        .close-dropdown:hover {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+        }
+
+        .history-list {
+            max-height: 320px;
+            overflow-y: auto;
+        }
+
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .history-item:last-child {
+            border-bottom: none;
+        }
+
+        .history-item:hover {
+            background: #f0f4ff;
+            padding-left: 20px;
+        }
+
+        .history-item span:first-child {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .history-time {
+            color: #999;
+            font-size: 0.8rem;
+            white-space: nowrap;
+            margin-left: 12px;
+        }
+
+        /* Phase 4: Keyboard Shortcuts - Shortcuts Help Modal */
+        .shortcuts-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .shortcuts-table th {
+            background: #f3f4f6;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .shortcuts-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .shortcuts-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .shortcuts-table kbd {
+            background: #e5e7eb;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            border: 1px solid #d1d5db;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        @media (max-width: 600px) {
+            .search-history-dropdown {
+                min-width: 90%;
+                max-width: 90%;
+            }
+
+            .shortcuts-table {
+                font-size: 0.9rem;
+            }
+
+            .shortcuts-table kbd {
+                font-size: 0.8rem;
+                padding: 3px 6px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1094,14 +1298,14 @@
     <div id="weather-container" style="display: none;">
         <!-- Display mode controls -->
         <div class="display-controls">
-            <button id="fullscreen-btn" class="mode-btn" title="Toggle fullscreen" style="display: none;">
-                <svg id="expand-icon" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
-                <svg id="compress-icon" style="display:none" viewBox="0 0 24 24"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>
+            <button id="fullscreen-btn" class="mode-btn" aria-label="Toggle fullscreen mode" aria-pressed="false" aria-keyshortcuts="Control+Enter" title="Toggle fullscreen" style="display: none;">
+                <svg id="expand-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                <svg id="compress-icon" style="display:none" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>
             </button>
         </div>
 
         <!-- Controls section will be injected here -->
-        <div class="controls-section">
+        <div class="controls-section" role="search" aria-label="Weather location search">
             <div class="search-container">
                 <input
                     type="text"
@@ -1109,10 +1313,21 @@
                     class="search-input"
                     placeholder="Search for a city or location..."
                     autocomplete="off"
+                    aria-label="Enter city or location name"
+                    aria-describedby="search-help"
                 >
-                <button id="search-btn" class="btn btn-primary">
+                <button id="history-dropdown-btn" class="btn btn-secondary" aria-label="Show search history" aria-expanded="false" title="Search history (Ctrl+H)">
+                    <span id="history-arrow">▼</span>
+                </button>
+                <button id="search-btn" class="btn btn-primary" aria-label="Search for weather" aria-busy="false">
                     🔍 Search
                 </button>
+                <button id="shortcuts-btn" class="btn btn-secondary" aria-label="Show keyboard shortcuts (Ctrl+/)" title="Keyboard shortcuts (Ctrl+/ or F1)">
+                    ⌨️ Shortcuts
+                </button>
+                <span id="search-help" class="sr-only">
+                    Type a location and press Enter or click Search button
+                </span>
             </div>
 
             <div class="quick-cities" id="quick-cities">
@@ -1120,13 +1335,13 @@
             </div>
 
             <div class="action-buttons">
-                <button id="tell-claude-btn" class="btn btn-secondary">
+                <button id="tell-claude-btn" class="btn btn-secondary" aria-label="Send current weather to chat">
                     💬 Tell Claude
                 </button>
-                <button id="open-web-btn" class="btn btn-secondary">
+                <button id="open-web-btn" class="btn btn-secondary" aria-label="Open Weather.com in browser">
                     🌐 View on Weather.com
                 </button>
-                <button id="stream-btn" class="btn btn-primary" style="background: linear-gradient(135deg, #10b981, #059669);">
+                <button id="stream-btn" class="btn btn-primary" style="background: linear-gradient(135deg, #10b981, #059669);" aria-label="View progressive weather analysis">
                     🌊 Stream Analysis
                 </button>
             </div>
@@ -1137,14 +1352,14 @@
 
         <!-- Logging panel -->
         <div class="logging-section">
-            <div class="logging-header" id="logging-header">
+            <div class="logging-header" id="logging-header" role="button" aria-expanded="false" aria-controls="logging-content" tabindex="0">
                 <div class="logging-title">
                     📝 Activity Log
                     <span id="log-count" style="opacity: 0.7; font-size: 0.85rem;"></span>
                 </div>
-                <div class="logging-toggle" id="logging-toggle">▼</div>
+                <div class="logging-toggle" id="logging-toggle" aria-hidden="true">▼</div>
             </div>
-            <div class="logging-content" id="logging-content"></div>
+            <div class="logging-content" id="logging-content" role="log" aria-label="Activity log" aria-live="polite" aria-atomic="false"></div>
         </div>
     </div>
     <script type="module" src="/src/weather-app.ts"></script>

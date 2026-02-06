@@ -52,6 +52,123 @@ const log = {
 // Phase 3: Persistence & State
 let viewUUID: string | null = null; // Storage key from tool result metadata
 
+// Phase 5: Performance Monitoring & Telemetry
+/**
+ * Performance metric entry
+ */
+interface PerformanceMetric {
+  timestamp: number;
+  operation: string;
+  duration: number;
+  success: boolean;
+  metadata?: Record<string, any>;
+}
+
+/**
+ * Error log entry
+ */
+interface ErrorLog {
+  timestamp: number;
+  operation: string;
+  error: string;
+  stack?: string;
+}
+
+/**
+ * User action log entry
+ */
+interface UserActionLog {
+  timestamp: number;
+  action: string;
+  metadata?: Record<string, any>;
+}
+
+/**
+ * Telemetry data collection
+ */
+interface TelemetryData {
+  sessionId: string;
+  metrics: PerformanceMetric[];
+  errors: ErrorLog[];
+  userActions: UserActionLog[];
+}
+
+/**
+ * Generate a simple UUID for session tracking
+ */
+function generateSessionId(): string {
+  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+// Telemetry state
+const telemetry: TelemetryData = {
+  sessionId: generateSessionId(),
+  metrics: [],
+  errors: [],
+  userActions: [],
+};
+
+/**
+ * Track user action
+ */
+function trackUserAction(action: string, metadata?: Record<string, any>): void {
+  telemetry.userActions.push({
+    timestamp: Date.now(),
+    action,
+    metadata,
+  });
+}
+
+/**
+ * Send telemetry batch to log
+ */
+async function sendTelemetryBatch(): Promise<void> {
+  try {
+    if (telemetry.metrics.length === 0 && telemetry.errors.length === 0 && telemetry.userActions.length === 0) {
+      return;
+    }
+
+    const avgLatency = telemetry.metrics.length > 0
+      ? telemetry.metrics.reduce((a, m) => a + m.duration, 0) / telemetry.metrics.length
+      : 0;
+
+    const successRate = telemetry.metrics.length > 0
+      ? (telemetry.metrics.filter((m) => m.success).length / telemetry.metrics.length) * 100
+      : 100;
+
+    await log.info("Telemetry batch", {
+      sessionId: telemetry.sessionId,
+      metricsCount: telemetry.metrics.length,
+      errorsCount: telemetry.errors.length,
+      actionsCount: telemetry.userActions.length,
+      avgLatency: avgLatency.toFixed(2) + "ms",
+      successRate: successRate.toFixed(1) + "%",
+    });
+
+    // Clear sent metrics
+    telemetry.metrics = [];
+    telemetry.errors = [];
+    telemetry.userActions = [];
+  } catch (error) {
+    console.error("Failed to send telemetry:", error);
+  }
+}
+
+/**
+ * Initialize telemetry periodic sending
+ */
+function initializeTelemetry(): void {
+  // Send telemetry every 60 seconds
+  setInterval(() => {
+    sendTelemetryBatch();
+  }, 60000);
+
+  // Send on page unload
+  window.addEventListener("beforeunload", () => {
+    sendTelemetryBatch();
+  });
+}
+
 /**
  * Favorite location for quick access
  */
@@ -317,10 +434,14 @@ function updateFullscreenButton(): void {
     expandIcon.style.display = "none";
     compressIcon.style.display = "block";
     fullscreenBtn.title = "Exit fullscreen";
+    fullscreenBtn.setAttribute("aria-pressed", "true");
+    fullscreenBtn.setAttribute("aria-label", "Exit fullscreen mode");
   } else {
     expandIcon.style.display = "block";
     compressIcon.style.display = "none";
     fullscreenBtn.title = "Toggle fullscreen";
+    fullscreenBtn.setAttribute("aria-pressed", "false");
+    fullscreenBtn.setAttribute("aria-label", "Enter fullscreen mode");
   }
 }
 
@@ -331,6 +452,12 @@ async function toggleFullscreen(): Promise<void> {
   const newMode = currentDisplayMode === "fullscreen" ? "inline" : "fullscreen";
 
   await log.info(`Requesting display mode: ${newMode}`);
+
+  // Track user action
+  trackUserAction("toggle_fullscreen", {
+    fromMode: currentDisplayMode,
+    toMode: newMode,
+  });
 
   try {
     await appInstance.requestDisplayMode({ mode: newMode });
@@ -502,8 +629,8 @@ function renderWeather(data: WeatherData): void {
     <div class="location-header">
       <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
         <h1>${data.location}</h1>
-        <button id="favorite-btn" class="favorite-btn" title="${favorited ? "Remove from favorites" : "Add to favorites"}">${starIcon}</button>
-        <button id="bookmark-btn" class="favorite-btn" title="${bookmarked ? "View/edit bookmark" : "Add bookmark with note"}">${bookmarkIcon}</button>
+        <button id="favorite-btn" class="favorite-btn" title="${favorited ? "Remove from favorites" : "Add to favorites"}" aria-label="${favorited ? "Remove from favorites" : "Add to favorites"}" aria-pressed="${favorited}">${starIcon}</button>
+        <button id="bookmark-btn" class="favorite-btn" title="${bookmarked ? "View/edit bookmark" : "Add bookmark with note"}" aria-label="${bookmarked ? "View/edit bookmark" : "Add bookmark with note"}" aria-pressed="${bookmarked}">${bookmarkIcon}</button>
       </div>
       <p>${data.latitude.toFixed(2)}°, ${data.longitude.toFixed(2)}°</p>
     </div>
@@ -539,9 +666,9 @@ function renderWeather(data: WeatherData): void {
     <div class="forecast-section">
       <div class="forecast-header">
         <div class="forecast-title">7-Day Forecast</div>
-        <button id="forecast-toggle-btn" class="forecast-toggle">
+        <button id="forecast-toggle-btn" class="forecast-toggle" aria-label="Show 7-day forecast" aria-expanded="false" aria-controls="forecast-content">
           <span id="forecast-toggle-text">Show Forecast</span>
-          <span id="forecast-toggle-icon">▼</span>
+          <span id="forecast-toggle-icon" aria-hidden="true">▼</span>
         </button>
       </div>
       <div id="forecast-content" class="forecast-content">
@@ -586,16 +713,36 @@ function setupFavoriteButton(data: WeatherData): void {
   const favoriteBtn = document.getElementById("favorite-btn");
   if (!favoriteBtn) return;
 
+  const updateAriaState = () => {
+    const favorited = isFavorited(data.location);
+    favoriteBtn.textContent = favorited ? "⭐" : "☆";
+    favoriteBtn.title = favorited ? "Remove from favorites" : "Add to favorites";
+    favoriteBtn.setAttribute("aria-pressed", String(favorited));
+    favoriteBtn.setAttribute(
+      "aria-label",
+      favorited ? "Remove from favorites" : "Add to favorites"
+    );
+  };
+
+  updateAriaState();
+
   favoriteBtn.addEventListener("click", () => {
-    if (isFavorited(data.location)) {
+    const wasFavorited = isFavorited(data.location);
+
+    if (wasFavorited) {
       removeFromFavorites(data.location);
-      favoriteBtn.textContent = "☆";
-      favoriteBtn.title = "Add to favorites";
     } else {
       addToFavorites(data.location, data.latitude, data.longitude);
-      favoriteBtn.textContent = "⭐";
-      favoriteBtn.title = "Remove from favorites";
     }
+
+    // Track user action
+    trackUserAction("toggle_favorite", {
+      location: data.location,
+      wasFavorited,
+      newState: !wasFavorited ? "favorited" : "unfavorited",
+    });
+
+    updateAriaState();
   });
 }
 
@@ -606,8 +753,176 @@ function setupBookmarkButton(data: WeatherData): void {
   const bookmarkBtn = document.getElementById("bookmark-btn");
   if (!bookmarkBtn) return;
 
+  const updateAriaState = () => {
+    const bookmarked = isBookmarked(data.location);
+    bookmarkBtn.textContent = bookmarked ? "📌" : "📍";
+    bookmarkBtn.title = bookmarked ? "View/edit bookmark" : "Add bookmark with note";
+    bookmarkBtn.setAttribute("aria-pressed", String(bookmarked));
+    bookmarkBtn.setAttribute(
+      "aria-label",
+      bookmarked ? "View/edit bookmark" : "Add bookmark with note"
+    );
+  };
+
+  updateAriaState();
+
   bookmarkBtn.addEventListener("click", () => {
+    trackUserAction("open_bookmark_modal", {
+      location: data.location,
+      isBookmarked: isBookmarked(data.location),
+    });
+
     showBookmarkModal(data);
+    // Will update on modal close if bookmark was added/removed
+  });
+}
+
+/**
+ * Show search history dropdown (attached to search bar)
+ */
+function showSearchHistoryDropdown(): void {
+  const historyBtn = document.getElementById("history-dropdown-btn");
+
+  // Check if dropdown already exists (toggle off)
+  const existingDropdown = document.querySelector(".search-history-dropdown");
+  if (existingDropdown) {
+    existingDropdown.remove();
+    if (historyBtn) {
+      historyBtn.setAttribute("aria-expanded", "false");
+    }
+    return;
+  }
+
+  const searchContainer = document.querySelector(".search-container");
+  if (!searchContainer) return;
+
+  // Update button state
+  if (historyBtn) {
+    historyBtn.setAttribute("aria-expanded", "true");
+  }
+
+  // Create dropdown
+  const dropdown = document.createElement("div");
+  dropdown.className = "search-history-dropdown";
+
+  if (persistedState.searchHistory.length === 0) {
+    dropdown.innerHTML = `
+      <div class="dropdown-header">
+        <h3>Recent Searches</h3>
+        <button class="close-dropdown">×</button>
+      </div>
+      <div class="history-list">
+        <div style="padding: 20px; text-align: center; color: #999;">No recent searches</div>
+      </div>
+    `;
+  } else {
+    dropdown.innerHTML = `
+      <div class="dropdown-header">
+        <h3>Recent Searches</h3>
+        <button class="close-dropdown">×</button>
+      </div>
+      <div class="history-list">
+        ${persistedState.searchHistory
+          .map(
+            (entry) => `
+          <div class="history-item" data-location="${entry.location}">
+            <span>${entry.location}</span>
+            <span class="history-time">${new Date(entry.timestamp).toLocaleString()}</span>
+          </div>
+        `
+          )
+          .join("")}
+      </div>
+    `;
+  }
+
+  searchContainer.appendChild(dropdown);
+
+  // Helper function to close dropdown
+  const closeDropdown = () => {
+    dropdown.remove();
+    if (historyBtn) {
+      historyBtn.setAttribute("aria-expanded", "false");
+    }
+  };
+
+  // Click handlers for history items
+  dropdown.querySelectorAll(".history-item").forEach((item) => {
+    item.addEventListener("click", () => {
+      const location = item.getAttribute("data-location");
+      if (location) {
+        searchLocation(location);
+        closeDropdown();
+      }
+    });
+  });
+
+  // Close button handler
+  dropdown.querySelector(".close-dropdown")?.addEventListener("click", () => {
+    closeDropdown();
+  });
+
+  // Close when clicking outside
+  setTimeout(() => {
+    document.addEventListener("click", function closeOnClickOutside(e) {
+      if (!dropdown.contains(e.target as Node) && !searchContainer.contains(e.target as Node)) {
+        closeDropdown();
+        document.removeEventListener("click", closeOnClickOutside);
+      }
+    });
+  }, 0);
+}
+
+/**
+ * Show keyboard shortcuts help modal (toggles if already open)
+ */
+function showKeyboardShortcutsHelp(): void {
+  // Check if modal is already open
+  const existingModal = document.querySelector(".shortcuts-modal");
+  if (existingModal) {
+    // Toggle off - close the modal
+    existingModal.remove();
+    return;
+  }
+
+  // Create new modal
+  const modal = document.createElement("div");
+  modal.className = "insights-modal shortcuts-modal";
+  modal.innerHTML = `
+    <div class="insights-content" style="max-width: 600px;">
+      <div class="insights-header">
+        <h2>⌨️ Keyboard Shortcuts</h2>
+        <button class="close-shortcuts">×</button>
+      </div>
+      <div class="insights-body">
+        <table class="shortcuts-table">
+          <tbody>
+            <tr><th colspan="2">Display</th></tr>
+            <tr><td><kbd>Ctrl</kbd> + <kbd>Enter</kbd></td><td>Toggle fullscreen</td></tr>
+            <tr><td><kbd>Esc</kbd></td><td>Exit fullscreen</td></tr>
+
+            <tr><th colspan="2">Weather Actions</th></tr>
+            <tr><td><kbd>Ctrl</kbd> + <kbd>S</kbd></td><td>Toggle favorite</td></tr>
+            <tr><td><kbd>Ctrl</kbd> + <kbd>B</kbd></td><td>Open bookmarks</td></tr>
+            <tr><td><kbd>Ctrl</kbd> + <kbd>H</kbd></td><td>Show search history</td></tr>
+            <tr><td><kbd>Ctrl</kbd> + <kbd>F</kbd></td><td>Focus search box</td></tr>
+            <tr><td><kbd>Ctrl</kbd> + <kbd>R</kbd></td><td>Refresh weather</td></tr>
+
+            <tr><th colspan="2">Help</th></tr>
+            <tr><td><kbd>Ctrl</kbd> + <kbd>/</kbd> or <kbd>F1</kbd></td><td>Toggle this help</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  modal.querySelector(".close-shortcuts")?.addEventListener("click", () => {
+    modal.remove();
+  });
+
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) modal.remove();
   });
 }
 
@@ -671,11 +986,13 @@ function showBookmarkModal(data: WeatherData): void {
 
     addOrUpdateBookmark(data.location, data.latitude, data.longitude, note);
 
-    // Update button icon
+    // Update button icon and ARIA
     const bookmarkBtn = document.getElementById("bookmark-btn");
     if (bookmarkBtn) {
       bookmarkBtn.textContent = "📌";
       bookmarkBtn.title = "View/edit bookmark";
+      bookmarkBtn.setAttribute("aria-pressed", "true");
+      bookmarkBtn.setAttribute("aria-label", "View/edit bookmark");
     }
 
     closeModal();
@@ -689,11 +1006,13 @@ function showBookmarkModal(data: WeatherData): void {
     if (confirm(`Remove bookmark from ${data.location}?`)) {
       removeBookmark(data.location);
 
-      // Update button icon
+      // Update button icon and ARIA
       const bookmarkBtn = document.getElementById("bookmark-btn");
       if (bookmarkBtn) {
         bookmarkBtn.textContent = "📍";
         bookmarkBtn.title = "Add bookmark with note";
+        bookmarkBtn.setAttribute("aria-pressed", "false");
+        bookmarkBtn.setAttribute("aria-label", "Add bookmark with note");
       }
 
       closeModal();
@@ -750,15 +1069,36 @@ async function searchLocation(location: string): Promise<void> {
   if (searchBtn) {
     searchBtn.setAttribute("disabled", "true");
     searchBtn.innerHTML = '<span class="loading-spinner"></span> Searching...';
+    searchBtn.setAttribute("aria-busy", "true");
   }
 
   log.info(`Searching for location: ${location}`);
+
+  // Track user action
+  trackUserAction("search_location", { location });
+
+  // Track performance
+  const startTime = performance.now();
 
   try {
     // Call the show-weather tool with the location
     const result = await appInstance.callServerTool({
       name: "show-weather",
       arguments: { location },
+    });
+
+    const duration = performance.now() - startTime;
+
+    // Track successful call
+    telemetry.metrics.push({
+      timestamp: Date.now(),
+      operation: "callServerTool:show-weather",
+      duration,
+      success: true,
+      metadata: {
+        location,
+        responseSize: JSON.stringify(result).length,
+      },
     });
 
     log.info("Weather tool result received", result);
@@ -776,6 +1116,27 @@ async function searchLocation(location: string): Promise<void> {
       showError("No weather data in response");
     }
   } catch (error) {
+    const duration = performance.now() - startTime;
+
+    // Track failed call
+    telemetry.metrics.push({
+      timestamp: Date.now(),
+      operation: "callServerTool:show-weather",
+      duration,
+      success: false,
+      metadata: {
+        location,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    });
+
+    telemetry.errors.push({
+      timestamp: Date.now(),
+      operation: "searchLocation",
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+
     const errorMsg = error instanceof Error ? error.message : String(error);
     log.error("Failed to fetch weather", errorMsg);
     showError(`Failed to fetch weather: ${errorMsg}`);
@@ -783,6 +1144,7 @@ async function searchLocation(location: string): Promise<void> {
     if (searchBtn) {
       searchBtn.removeAttribute("disabled");
       searchBtn.innerHTML = "🔍 Search";
+      searchBtn.setAttribute("aria-busy", "false");
     }
   }
 }
@@ -800,6 +1162,12 @@ async function tellClaude(): Promise<void> {
   const message = `The weather in ${data.location} is currently ${Math.round(data.current.temperature)}°C and ${data.current.condition.toLowerCase()}. It feels like ${Math.round(data.current.feelsLike)}°C with ${data.current.humidity}% humidity.`;
 
   log.info("Sending message to chat", message);
+
+  // Track user action
+  trackUserAction("tell_claude", {
+    location: data.location,
+    messageLength: message.length,
+  });
 
   try {
     await appInstance.sendMessage({
@@ -1104,10 +1472,13 @@ function initializeLoggingPanel(): void {
   content.classList.add("collapsed");
   toggle.textContent = "▶";
 
-  header.addEventListener("click", () => {
+  const toggleLogPanel = () => {
     isLogExpanded = !isLogExpanded;
     content.classList.toggle("collapsed", !isLogExpanded);
     toggle.textContent = isLogExpanded ? "▼" : "▶";
+
+    // Update ARIA attributes
+    header.setAttribute("aria-expanded", String(isLogExpanded));
 
     // Update viewport height dynamically
     updateViewportHeight();
@@ -1115,6 +1486,16 @@ function initializeLoggingPanel(): void {
     console.log(
       `[WEATHER-APP] Activity log ${isLogExpanded ? "expanded" : "collapsed"}`,
     );
+  };
+
+  header.addEventListener("click", toggleLogPanel);
+
+  // Support keyboard activation (Enter and Space)
+  header.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggleLogPanel();
+    }
   });
 }
 
@@ -1134,6 +1515,15 @@ function setupForecastToggle(): void {
     forecastContent.classList.toggle("visible", isForecastVisible);
     toggleText.textContent = isForecastVisible ? "Hide Forecast" : "Show Forecast";
     toggleIcon.textContent = isForecastVisible ? "▲" : "▼";
+
+    // Update ARIA attributes
+    toggleBtn.setAttribute("aria-expanded", String(isForecastVisible));
+    toggleBtn.setAttribute("aria-label", isForecastVisible ? "Hide 7-day forecast" : "Show 7-day forecast");
+
+    // Track user action
+    trackUserAction("toggle_forecast", {
+      visible: isForecastVisible,
+    });
 
     // Update viewport height dynamically
     updateViewportHeight();
@@ -1233,6 +1623,10 @@ async function initialize() {
     await app.connect();
     await log.info("Connected to host");
 
+    // Initialize telemetry
+    initializeTelemetry();
+    await log.info("Telemetry initialized", { sessionId: telemetry.sessionId });
+
     // Show the weather container immediately
     const container = document.getElementById("weather-container");
     if (container) {
@@ -1289,6 +1683,26 @@ async function initialize() {
       await log.info("Stream button registered");
     }
 
+    // Set up shortcuts button
+    const shortcutsBtn = document.getElementById("shortcuts-btn");
+    if (shortcutsBtn) {
+      shortcutsBtn.addEventListener("click", () => {
+        trackUserAction("open_shortcuts_help", { source: "button" });
+        showKeyboardShortcutsHelp();
+      });
+      await log.info("Shortcuts button registered");
+    }
+
+    // Set up history dropdown button
+    const historyDropdownBtn = document.getElementById("history-dropdown-btn");
+    if (historyDropdownBtn) {
+      historyDropdownBtn.addEventListener("click", () => {
+        trackUserAction("toggle_search_history", { source: "button" });
+        showSearchHistoryDropdown();
+      });
+      await log.info("History dropdown button registered");
+    }
+
     // Set up fullscreen button
     const fullscreenBtn = document.getElementById("fullscreen-btn");
     if (fullscreenBtn) {
@@ -1324,8 +1738,65 @@ async function initialize() {
         e.preventDefault();
         await toggleFullscreen();
       }
+
+      // Ctrl+S or Cmd+S: Toggle favorite
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        if (currentWeatherData) {
+          if (isFavorited(currentWeatherData.location)) {
+            removeFromFavorites(currentWeatherData.location);
+          } else {
+            addToFavorites(
+              currentWeatherData.location,
+              currentWeatherData.latitude,
+              currentWeatherData.longitude
+            );
+          }
+          renderWeather(currentWeatherData); // Refresh UI
+          await log.info("Toggled favorite via keyboard shortcut");
+        }
+      }
+
+      // Ctrl+B or Cmd+B: Open bookmarks
+      if ((e.ctrlKey || e.metaKey) && e.key === "b") {
+        e.preventDefault();
+        if (currentWeatherData) {
+          showBookmarkModal(currentWeatherData);
+        }
+      }
+
+      // Ctrl+H or Cmd+H: Show search history
+      if ((e.ctrlKey || e.metaKey) && e.key === "h") {
+        e.preventDefault();
+        showSearchHistoryDropdown();
+      }
+
+      // Ctrl+F or Cmd+F: Focus search input
+      if ((e.ctrlKey || e.metaKey) && e.key === "f") {
+        e.preventDefault();
+        const searchInput = document.getElementById("location-search") as HTMLInputElement;
+        searchInput?.focus();
+      }
+
+      // Ctrl+R or Cmd+R: Refresh current weather
+      if ((e.ctrlKey || e.metaKey) && e.key === "r") {
+        e.preventDefault();
+        if (currentWeatherData) {
+          await searchLocation(currentWeatherData.location);
+        }
+      }
+
+      // Ctrl+/ or F1: Toggle keyboard shortcuts help
+      if (((e.ctrlKey || e.metaKey) && e.key === "/") || e.key === "F1") {
+        e.preventDefault();
+        trackUserAction("toggle_shortcuts_help", {
+          source: e.key === "F1" ? "F1" : "Ctrl+/",
+          action: document.querySelector(".shortcuts-modal") ? "close" : "open"
+        });
+        showKeyboardShortcutsHelp();
+      }
     });
-    await log.info("Keyboard shortcuts registered (Escape, Ctrl+Enter)");
+    await log.info("Keyboard shortcuts registered (Escape, Ctrl+Enter, Ctrl+S, Ctrl+B, Ctrl+H, Ctrl+F, Ctrl+R, Ctrl+/, F1)");
 
     // Wait a bit for tool input
     setTimeout(async () => {
