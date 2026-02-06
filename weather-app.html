@@ -438,12 +438,15 @@
 
         .search-container {
             display: flex;
+            flex-wrap: nowrap;
             gap: 8px;
             margin-bottom: 10px;
+            align-items: center;
         }
 
         .search-input {
-            flex: 1;
+            flex: 1 1 auto;
+            min-width: 200px;
             padding: 10px 14px;
             border: 2px solid #ddd;
             border-radius: 8px;
@@ -457,16 +460,18 @@
         }
 
         .btn {
-            padding: 8px 16px;
+            padding: 10px 14px;
             border: none;
             border-radius: 6px;
             font-size: 0.9rem;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
-            display: flex;
+            display: inline-flex;
             align-items: center;
             gap: 6px;
+            flex: 0 0 auto;
+            white-space: nowrap;
         }
 
         .btn:disabled {
@@ -496,9 +501,10 @@
         }
 
         #history-dropdown-btn {
-            min-width: 48px;
-            padding: 10px 12px;
-            font-size: 1rem;
+            min-width: auto;
+            width: auto;
+            padding: 10px 14px;
+            font-size: 0.9rem;
             transition: all 0.3s ease;
         }
 
@@ -811,15 +817,13 @@
                 font-size: 0.8rem;
             }
 
-            .search-container {
-                flex-direction: column;
-            }
+            /* Removed flex-direction: column to keep search elements on one row */
 
             .action-buttons {
                 flex-direction: column;
             }
 
-            .btn {
+            .btn.action-btn {
                 width: 100%;
                 justify-content: center;
             }
@@ -1502,6 +1506,46 @@
             .notification-content {
                 min-width: auto;
                 max-width: none;
+            }
+
+            .search-container {
+                gap: 6px;
+            }
+
+            .search-input {
+                font-size: 0.9rem;
+                padding: 8px 10px;
+            }
+
+            .btn {
+                padding: 8px 10px;
+                font-size: 0.85rem;
+                gap: 4px;
+            }
+
+            #history-dropdown-btn {
+                padding: 8px 10px;
+            }
+        }
+
+        /* Very small screens - wrap buttons to next row */
+        @media (max-width: 500px) {
+            .search-container {
+                flex-wrap: wrap;
+            }
+
+            .search-input {
+                flex: 1 1 100%;
+                min-width: 100%;
+            }
+
+            .btn {
+                flex: 1 1 auto;
+            }
+
+            #history-dropdown-btn {
+                flex: 0 0 auto;
+                min-width: 44px;
             }
         }
     </style>
