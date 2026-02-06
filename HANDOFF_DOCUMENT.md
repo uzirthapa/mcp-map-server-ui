@@ -1,8 +1,8 @@
 # MCP Map Server UI - Project Handoff Document
-**Date:** 2026-02-06
+**Date:** 2026-02-06 (Updated)
 **Project:** MCP Map Server with Interactive Weather Dashboard
 **Repository:** https://github.com/uzirthapa/mcp-map-server-ui
-**Last Commit:** f7b3973 - Fix GitHub Actions CI/CD: install Playwright browsers before tests
+**Last Commit:** fc45b2c - Update .gitignore and add project documentation
 
 ---
 
@@ -379,10 +379,11 @@ export default defineConfig({
 6. ✅ Favorites system with localStorage
 7. ✅ Removed insights feature (uzir-weather-insights)
 8. ✅ Cancelled currency feature (per user request)
-9. ✅ Comprehensive documentation (README, CUSTOM-API-GUIDE)
+9. ✅ Comprehensive documentation (README, CUSTOM-API-GUIDE, TESTING_WORKFLOW)
 10. ✅ Playwright E2E tests (keyboard shortcuts, UI interactions)
 11. ✅ GitHub Actions CI/CD pipeline
-12. ✅ **LATEST FIX:** Playwright browser installation in CI/CD
+12. ✅ Playwright browser installation in CI/CD
+13. ✅ **LATEST:** Responsive search bar layout with smart wrapping
 
 ### 🔧 User-Added Features (Not in Summary)
 - Bookmarks with notes
@@ -413,9 +414,9 @@ export default defineConfig({
 ### 🚀 Deployment Status
 - **Environment:** Azure Web App
 - **URL:** https://mcp-apps-020426.azurewebsites.net
-- **Last Deploy:** After commit f7b3973
+- **Last Deploy:** After commit fc45b2c
 - **CI/CD:** Automated via GitHub Actions on push to main
-- **Status:** ✅ Should be working after Playwright fix
+- **Status:** ✅ Working - Latest responsive layout deployed
 
 ---
 
@@ -423,7 +424,89 @@ export default defineConfig({
 
 ### Last Session Summary
 
-#### 1. **GitHub Actions CI/CD Fix** (Most Recent - 2026-02-06)
+#### 1. **Responsive Search Bar Layout** (Most Recent - 2026-02-06)
+**Problem:** Search header elements were cramped on smaller screens, with all buttons and input forced onto one row even when space was limited at mobile sizes.
+
+**Requirement:** Make search input the largest element on the row, with buttons sized to their content. On very small screens (<500px), search input should go full-width and buttons should wrap to the next row.
+
+**Solution:** Implemented smart responsive layout with flex properties and media queries
+
+**Changes Made:**
+```css
+/* Base layout - all on one row */
+.search-container {
+    display: flex;
+    flex-wrap: nowrap;  /* Prevent wrapping at larger sizes */
+    gap: 8px;
+    align-items: center;
+}
+
+.search-input {
+    flex: 1 1 auto;      /* Take up remaining space */
+    min-width: 200px;     /* Trigger wrapping when too cramped */
+}
+
+.btn {
+    flex: 0 0 auto;       /* Fixed width based on content */
+    white-space: nowrap;  /* Prevent text wrapping */
+}
+
+/* Mobile breakpoint - wrap buttons below */
+@media (max-width: 500px) {
+    .search-container {
+        flex-wrap: wrap;  /* Allow wrapping */
+    }
+
+    .search-input {
+        flex: 1 1 100%;   /* Full width */
+        min-width: 100%;
+    }
+
+    .btn {
+        flex: 1 1 auto;   /* Share space on second row */
+    }
+}
+```
+
+**Fixed Issues:**
+- Removed `flex-direction: column` from tablet breakpoint (768px) that was causing unwanted stacking
+- Changed `.btn` to `.btn.action-btn` to only affect action buttons, not search buttons
+
+**Testing Process:**
+1. ✅ Read ext-apps basic-host documentation
+2. ✅ Built project and started MCP server
+3. ✅ Started ext-apps basic-host on port 8080
+4. ✅ Used Playwright MCP to test at 5 different screen sizes:
+   - Desktop (1280px): All on one row ✅
+   - Tablet (768px): All on one row ✅
+   - Small (600px): All on one row ✅
+   - Mobile (480px): Search full-width, buttons wrapped ✅
+   - Mobile (375px): Search full-width, buttons wrapped ✅
+5. ✅ Captured screenshots at each breakpoint
+6. ✅ Created TESTING_WORKFLOW.md documenting testing requirements
+
+**Responsive Behavior:**
+- **Desktop (1280px+):** All elements on one row, optimal spacing
+- **Tablet (768px):** All elements on one row, compact layout
+- **Small screens (500-600px):** All elements on one row, very compact
+- **Mobile (<500px):** Search input full-width, buttons wrap to next row
+
+**Commits:**
+- `fc8f03f` - "feat: Responsive search bar layout with smart wrapping"
+- `fc45b2c` - "chore: Update .gitignore and add project documentation"
+
+**Documentation Added:**
+- Created `TESTING_WORKFLOW.md` - Comprehensive guide for testing MCP Apps before commits
+  - Prerequisites (ext-apps, Playwright MCP)
+  - Step-by-step testing workflow
+  - Common issues and solutions
+  - Commit checklist
+
+**Result:** ✅ Responsive layout working perfectly at all screen sizes with smart wrapping behavior
+
+---
+
+#### 2. **GitHub Actions CI/CD Fix** (Previous - 2026-02-06)
 **Problem:** Build failing with error:
 ```
 Error: browserType.launch: Executable doesn't exist at
@@ -747,6 +830,54 @@ async function fetchWeather(location: string) {
   }
 }
 ```
+
+### 11. **Responsive Layout with Smart Wrapping**
+```css
+/* Pattern for responsive flex layouts that adapt to screen size */
+
+/* Base layout - optimized for larger screens */
+.search-container {
+    display: flex;
+    flex-wrap: nowrap;     /* Keep on one row by default */
+    gap: 8px;
+    align-items: center;
+}
+
+/* Main input - takes up remaining space */
+.search-input {
+    flex: 1 1 auto;        /* Grow to fill, shrink if needed */
+    min-width: 200px;      /* Minimum before triggering wrap */
+}
+
+/* Buttons - fixed size based on content */
+.btn {
+    flex: 0 0 auto;        /* Don't grow or shrink */
+    white-space: nowrap;   /* Keep text on one line */
+}
+
+/* Mobile breakpoint - wrap for better UX on small screens */
+@media (max-width: 500px) {
+    .search-container {
+        flex-wrap: wrap;   /* Allow wrapping */
+    }
+
+    .search-input {
+        flex: 1 1 100%;    /* Full width on first row */
+        min-width: 100%;
+    }
+
+    .btn {
+        flex: 1 1 auto;    /* Share space on second row */
+    }
+}
+```
+
+**Why This Pattern Works:**
+- Desktop: All elements on one row with optimal spacing
+- Tablet: Compressed but still readable on one row
+- Mobile: Search input gets full width, buttons wrap below for better touch targets
+- Uses `min-width` to trigger natural wrapping when space is constrained
+- `flex: 0 0 auto` on buttons prevents unwanted growing/shrinking
 
 ---
 
