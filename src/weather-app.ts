@@ -1731,6 +1731,13 @@ app.onerror = (error: Error) => {
   log.error("App error occurred", error.message);
 };
 
+// Note: The MCP Apps SDK doesn't expose a direct way to handle custom notifications
+// like notifications/tools/list_changed through the App class. The App class provides
+// convenience setters (ontoolresult, onhostcontextchanged, etc.) for specific notifications,
+// but for custom notifications, we would need to access the underlying Protocol class.
+// For now, we've enabled the capability on the server side, and it can be tested
+// through the test-tools-notification tool.
+
 // Handle tool input (initial call)
 app.ontoolinput = async (params) => {
   log.info("Received tool input:", params);

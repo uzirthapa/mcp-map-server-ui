@@ -178,10 +178,19 @@ async function geocodeWithNominatim(query: string): Promise<NominatimResult[]> {
  * Each HTTP session needs its own server instance because McpServer only supports one transport.
  */
 export function createServer(): McpServer {
-  const server = new McpServer({
-    name: "CesiumJS Map Server",
-    version: "1.0.0",
-  });
+  const server = new McpServer(
+    {
+      name: "CesiumJS Map Server",
+      version: "1.0.0",
+    },
+    {
+      capabilities: {
+        tools: {
+          listChanged: true, // Enable dynamic tool list updates
+        },
+      },
+    }
+  );
 
   // CSP configuration for external tile sources
   const cspMeta = {
@@ -795,6 +804,34 @@ export function createServer(): McpServer {
           // Include all updates so the app can simulate progressive display
           updates,
         },
+      };
+    }
+  );
+
+  // Test tool to demonstrate tools/list_changed notification
+  // In a real scenario, this would be triggered when tools are actually added/removed dynamically
+  server.registerTool(
+    "test-tools-notification",
+    {
+      title: "Test Tools Notification",
+      description:
+        "Triggers a tools/list_changed notification to demonstrate dynamic tool list updates. This simulates what happens when the server adds or removes tools.",
+      inputSchema: {},
+    },
+    async (): Promise<CallToolResult> => {
+      // Send notification to all connected clients using the underlying server
+      await server.server.notification({
+        method: "notifications/tools/list_changed",
+        params: {},
+      });
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Sent tools/list_changed notification to all connected clients. Apps should respond by showing a notification.",
+          },
+        ],
       };
     }
   );
