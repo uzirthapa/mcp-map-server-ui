@@ -507,6 +507,12 @@ interface WeatherData {
   }>;
 }
 
+// Comparison mode data structure
+interface ComparisonData {
+  locations: WeatherData[];
+  mode: "comparison";
+}
+
 // Popular cities for quick access
 const QUICK_CITIES = [
   "Paris",
@@ -704,6 +710,165 @@ function renderWeather(data: WeatherData): void {
   updateWeatherContext(data);
 
   log.info(`Weather rendered for ${data.location}`);
+}
+
+/**
+ * Render comparison view for multiple locations
+ */
+function renderComparisonView(data: ComparisonData): void {
+  const weatherContent = document.getElementById("weather-content");
+  if (!weatherContent) return;
+
+  weatherContent.innerHTML = `
+    <div class="comparison-header">
+      <h1>Weather Comparison</h1>
+      <button id="exit-comparison-btn" class="btn btn-secondary" aria-label="Exit comparison mode">
+        Exit Comparison
+      </button>
+    </div>
+    <div class="comparison-grid" id="comparison-grid">
+      ${data.locations.map((location, index) => renderComparisonCard(location, index)).join("")}
+    </div>
+  `;
+
+  // Set up exit button
+  const exitBtn = document.getElementById("exit-comparison-btn");
+  exitBtn?.addEventListener("click", () => {
+    // Clear the weather content and show a message
+    if (weatherContent) {
+      weatherContent.innerHTML = `
+        <div style="text-align: center; padding: 40px; color: white;">
+          <h2>Comparison mode exited</h2>
+          <p>Use the search box to look up weather for a location</p>
+        </div>
+      `;
+    }
+    log.info("Exited comparison mode");
+  });
+
+  // Set up remove buttons for each location
+  data.locations.forEach((location, index) => {
+    const removeBtn = document.getElementById(`remove-location-${index}`);
+    removeBtn?.addEventListener("click", () => {
+      // Remove this location from the comparison
+      const updatedLocations = data.locations.filter((_, i) => i !== index);
+
+      if (updatedLocations.length < 2) {
+        // If less than 2 locations remain, exit comparison mode
+        if (updatedLocations.length === 1) {
+          renderWeather(updatedLocations[0]);
+        } else {
+          weatherContent.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: white;">
+              <h2>Comparison mode exited</h2>
+              <p>Use the search box to look up weather for a location</p>
+            </div>
+          `;
+        }
+      } else {
+        // Re-render with updated locations
+        renderComparisonView({
+          locations: updatedLocations,
+          mode: "comparison",
+        });
+      }
+
+      log.info(`Removed ${location.location} from comparison`);
+      trackUserAction("remove_location_from_comparison", {
+        location: location.location,
+        remainingCount: updatedLocations.length,
+      });
+    });
+
+    // Set up favorite button for each card
+    const favoriteBtn = document.getElementById(`favorite-${index}`);
+    favoriteBtn?.addEventListener("click", () => {
+      if (isFavorited(location.location)) {
+        removeFromFavorites(location.location);
+      } else {
+        addToFavorites(location.location, location.latitude, location.longitude);
+      }
+      // Re-render to update the star icon
+      renderComparisonView(data);
+      log.info(`Toggled favorite for ${location.location} in comparison`);
+    });
+  });
+
+  // Update context with summary
+  const summaryText = data.locations
+    .map(
+      (loc) =>
+        `${loc.location}: ${Math.round(loc.current.temperature)}°C, ${loc.current.condition}`,
+    )
+    .join("; ");
+
+  appInstance.updateModelContext({
+    content: [
+      {
+        type: "text",
+        text: `Comparing weather for ${data.locations.length} locations: ${summaryText}`,
+      },
+    ],
+  });
+
+  log.info(`Comparison view rendered for ${data.locations.length} locations`);
+}
+
+/**
+ * Render a single comparison card
+ */
+function renderComparisonCard(data: WeatherData, index?: number): string {
+  const favorited = isFavorited(data.location);
+  const starIcon = favorited ? "⭐" : "☆";
+  const cardIndex = index ?? 0;
+
+  return `
+    <div class="comparison-card">
+      <div class="comparison-card-header">
+        <h2>${data.location}</h2>
+        <div class="comparison-card-actions">
+          <button
+            id="favorite-${cardIndex}"
+            class="favorite-btn"
+            title="${favorited ? "Remove from favorites" : "Add to favorites"}"
+            aria-label="${favorited ? "Remove from favorites" : "Add to favorites"}"
+            aria-pressed="${favorited}"
+          >${starIcon}</button>
+          <button
+            id="remove-location-${cardIndex}"
+            class="remove-location-btn"
+            aria-label="Remove ${data.location} from comparison"
+          >×</button>
+        </div>
+      </div>
+      <p class="comparison-coords">${data.latitude.toFixed(2)}°, ${data.longitude.toFixed(2)}°</p>
+
+      <div class="current-weather-compact">
+        <div class="weather-icon-large">${getWeatherIcon(data.current.weatherCode)}</div>
+        <div class="current-temp-large">${Math.round(data.current.temperature)}°C</div>
+        <div class="current-condition">${data.current.condition}</div>
+      </div>
+
+      <div class="comparison-stats">
+        <div class="stat">
+          <span class="stat-label">Feels Like</span>
+          <span class="stat-value">${Math.round(data.current.feelsLike)}°C</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Humidity</span>
+          <span class="stat-value">${data.current.humidity}%</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Wind</span>
+          <span class="stat-value">${Math.round(data.current.windSpeed)} km/h</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">UV Index</span>
+          <span class="stat-value">${data.current.uvIndex.toFixed(1)}</span>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 /**
@@ -1105,8 +1270,18 @@ async function searchLocation(location: string): Promise<void> {
 
     // Extract weather data from result
     const weatherData = result._meta?.weatherData as WeatherData | undefined;
+    const comparisonData = result._meta?.comparisonData as
+      | ComparisonData
+      | undefined;
 
-    if (weatherData) {
+    if (comparisonData) {
+      renderComparisonView(comparisonData);
+      hideLoading();
+      // Add all locations to search history
+      comparisonData.locations.forEach((loc) => {
+        addToSearchHistory(loc.location);
+      });
+    } else if (weatherData) {
       renderWeather(weatherData);
       hideLoading();
 
@@ -1574,8 +1749,33 @@ app.ontoolresult = async (result) => {
   }
 
   const weatherData = result._meta?.weatherData as WeatherData | undefined;
+  const comparisonData = result._meta?.comparisonData as
+    | ComparisonData
+    | undefined;
 
-  if (weatherData) {
+  if (comparisonData) {
+    try {
+      renderComparisonView(comparisonData);
+      hideLoading();
+
+      // Add all locations to search history
+      comparisonData.locations.forEach((loc) => {
+        addToSearchHistory(loc.location);
+      });
+
+      await log.info(
+        "Comparison view rendered",
+        `${comparisonData.locations.length} locations`,
+      );
+    } catch (error) {
+      await log.error(
+        "Failed to render comparison",
+        error instanceof Error ? error.message : String(error),
+      );
+      showError("Failed to display comparison data");
+      hideLoading();
+    }
+  } else if (weatherData) {
     try {
       renderWeather(weatherData);
       hideLoading();

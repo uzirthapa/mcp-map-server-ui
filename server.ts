@@ -470,6 +470,127 @@ export function createServer(): McpServer {
     },
   );
 
+  // compare-weather tool - side-by-side weather comparison for multiple locations
+  registerAppTool(
+    server,
+    "compare-weather",
+    {
+      title: "Compare Weather",
+      description:
+        "Compare weather conditions for 2-4 locations side-by-side. Perfect for comparing vacation destinations, planning travel, or checking weather across different cities.",
+      inputSchema: {
+        locations: z
+          .array(z.string())
+          .min(2)
+          .max(4)
+          .describe(
+            "List of 2-4 city names or places to compare (e.g., ['Paris', 'Tokyo', 'New York'])",
+          ),
+      },
+      _meta: {
+        [RESOURCE_URI_META_KEY]: WEATHER_RESOURCE_URI,
+        ui: {
+          displayMode: "fullscreen", // Force fullscreen for better comparison view
+        },
+      },
+    },
+    async ({ locations }): Promise<CallToolResult> => {
+      try {
+        // Validate location count
+        if (locations.length < 2 || locations.length > 4) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "Please provide between 2 and 4 locations to compare.",
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Geocode all locations and fetch weather data in parallel
+        const weatherPromises = locations.map(async (location) => {
+          // Geocode the location
+          const geocodeResults = await geocodeWithNominatim(location);
+          if (geocodeResults.length === 0) {
+            throw new Error(`Could not find location: ${location}`);
+          }
+
+          const firstResult = geocodeResults[0];
+          const lat = parseFloat(firstResult.lat);
+          const lon = parseFloat(firstResult.lon);
+          const locationName = firstResult.display_name.split(",")[0];
+
+          // Fetch weather data
+          const weatherData = await fetchWeatherData(lat, lon);
+
+          // Format the data
+          return {
+            location: locationName,
+            latitude: lat,
+            longitude: lon,
+            current: {
+              temperature: weatherData.current.temperature_2m,
+              condition: getWeatherCondition(weatherData.current.weather_code),
+              feelsLike: weatherData.current.apparent_temperature,
+              humidity: weatherData.current.relative_humidity_2m,
+              windSpeed: weatherData.current.wind_speed_10m,
+              uvIndex: weatherData.daily.uv_index_max[0],
+              weatherCode: weatherData.current.weather_code,
+            },
+            forecast: weatherData.daily.time.map((date, index) => ({
+              date,
+              tempMax: weatherData.daily.temperature_2m_max[index],
+              tempMin: weatherData.daily.temperature_2m_min[index],
+              weatherCode: weatherData.daily.weather_code[index],
+              condition: getWeatherCondition(
+                weatherData.daily.weather_code[index],
+              ),
+            })),
+          };
+        });
+
+        // Wait for all weather data to be fetched
+        const weatherDataArray = await Promise.all(weatherPromises);
+
+        // Create summary text
+        const summaryText = weatherDataArray
+          .map(
+            (data) =>
+              `${data.location}: ${data.current.temperature.toFixed(1)}°C, ${data.current.condition}`,
+          )
+          .join(" | ");
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Comparing weather for ${locations.join(", ")}: ${summaryText}`,
+            },
+          ],
+          _meta: {
+            viewUUID: randomUUID(),
+            comparisonData: {
+              locations: weatherDataArray,
+              mode: "comparison",
+            },
+          },
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Comparison error: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
   // geocode tool - searches for places using Nominatim (no UI)
   server.registerTool(
     "geocode",
